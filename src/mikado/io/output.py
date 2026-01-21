@@ -77,11 +77,20 @@ def _format_tsv(result: MKResult | PolarizedMKResult | AsymptoticMKResult) -> st
         return "\n".join(lines)
 
     elif isinstance(result, AsymptoticMKResult):
-        header = "Dn\tDs\talpha_asymptotic\tCI_low\tCI_high"
-        values = (
-            f"{result.dn}\t{result.ds}\t{result.alpha_asymptotic:.6f}\t"
-            f"{result.ci_low:.6f}\t{result.ci_high:.6f}"
-        )
+        if result.num_genes > 0:
+            # Aggregated result
+            header = "Dn\tDs\tPn\tPs\talpha_asymptotic\tCI_low\tCI_high\tmodel\tnum_genes"
+            values = (
+                f"{result.dn}\t{result.ds}\t{result.pn_total}\t{result.ps_total}\t"
+                f"{result.alpha_asymptotic:.6f}\t{result.ci_low:.6f}\t{result.ci_high:.6f}\t"
+                f"{result.model_type}\t{result.num_genes}"
+            )
+        else:
+            header = "Dn\tDs\talpha_asymptotic\tCI_low\tCI_high"
+            values = (
+                f"{result.dn}\t{result.ds}\t{result.alpha_asymptotic:.6f}\t"
+                f"{result.ci_low:.6f}\t{result.ci_high:.6f}"
+            )
         return f"{header}\n{values}"
 
     else:
