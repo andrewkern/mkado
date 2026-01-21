@@ -5,12 +5,66 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+from rich.style import Style
 
 from mikado import __version__
 from mikado.analysis.asymptotic import asymptotic_mk_test
 from mikado.analysis.mk_test import mk_test
 from mikado.analysis.polarized import polarized_mk_test
 from mikado.io.output import OutputFormat, format_batch_results, format_result
+
+
+class RainbowBarColumn(BarColumn):
+    """A progress bar that cycles through rainbow colors."""
+
+    RAINBOW_COLORS = [
+        "#FF0000",  # Red
+        "#FF7F00",  # Orange
+        "#FFFF00",  # Yellow
+        "#00FF00",  # Green
+        "#0000FF",  # Blue
+        "#4B0082",  # Indigo
+        "#9400D3",  # Violet
+    ]
+
+    def __init__(self) -> None:
+        super().__init__(bar_width=40)
+        self._color_index = 0
+
+    def render(self, task):  # type: ignore[no-untyped-def]
+        """Render the bar with rainbow colors."""
+        # Cycle through colors based on completed percentage
+        if task.total:
+            progress = task.completed / task.total
+            color_idx = int(progress * len(self.RAINBOW_COLORS) * 3) % len(
+                self.RAINBOW_COLORS
+            )
+        else:
+            color_idx = self._color_index
+            self._color_index = (self._color_index + 1) % len(self.RAINBOW_COLORS)
+
+        self.complete_style = Style(color=self.RAINBOW_COLORS[color_idx])
+        self.finished_style = Style(color="#9400D3")  # Violet when done
+        return super().render(task)
+
+
+def create_rainbow_progress() -> Progress:
+    """Create a rainbow-colored progress bar."""
+    return Progress(
+        SpinnerColumn(style="bold magenta"),
+        TextColumn("[bold blue]{task.description}"),
+        RainbowBarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+    )
 
 
 @click.group()
@@ -454,57 +508,72 @@ def batch(
             )
             return
 
-        click.echo(f"Processing {len(alignment_files)} alignment files...", err=True)
-
         results = []
-        for alignment_file in alignment_files:
-            try:
-                all_seqs = SequenceSet.from_fasta(alignment_file, reading_frame=reading_frame)
-                ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
-                outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
+        warnings = []
 
-                if len(ingroup_seqs) == 0:
-                    click.echo(
-                        f"Warning: No ingroup sequences in {alignment_file.name}", err=True
-                    )
-                    continue
-                if len(outgroup_seqs) == 0:
-                    click.echo(
-                        f"Warning: No outgroup sequences in {alignment_file.name}", err=True
-                    )
-                    continue
+        with create_rainbow_progress() as progress:
+            task = progress.add_task(
+                "Processing alignments", total=len(alignment_files)
+            )
 
-                if asymptotic:
-                    result = asymptotic_mk_test(
-                        ingroup=ingroup_seqs,
-                        outgroup=outgroup_seqs,
-                        reading_frame=reading_frame,
-                        num_bins=bins,
-                        bootstrap_replicates=bootstrap,
+            for alignment_file in alignment_files:
+                try:
+                    all_seqs = SequenceSet.from_fasta(
+                        alignment_file, reading_frame=reading_frame
                     )
-                elif polarize_match:
-                    outgroup2_seqs = all_seqs.filter_by_name(polarize_match)
-                    if len(outgroup2_seqs) == 0:
-                        click.echo(
-                            f"Warning: No outgroup2 sequences in {alignment_file.name}",
-                            err=True,
+                    ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
+                    outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
+
+                    if len(ingroup_seqs) == 0:
+                        warnings.append(
+                            f"Warning: No ingroup sequences in {alignment_file.name}"
                         )
+                        progress.advance(task)
                         continue
-                    result = polarized_mk_test(
-                        ingroup=ingroup_seqs,
-                        outgroup1=outgroup_seqs,
-                        outgroup2=outgroup2_seqs,
-                        reading_frame=reading_frame,
-                    )
-                else:
-                    result = mk_test(
-                        ingroup=ingroup_seqs,
-                        outgroup=outgroup_seqs,
-                        reading_frame=reading_frame,
-                    )
-                results.append((alignment_file.stem, result))
-            except Exception as e:
-                click.echo(f"Error processing {alignment_file.name}: {e}", err=True)
+                    if len(outgroup_seqs) == 0:
+                        warnings.append(
+                            f"Warning: No outgroup sequences in {alignment_file.name}"
+                        )
+                        progress.advance(task)
+                        continue
+
+                    if asymptotic:
+                        result = asymptotic_mk_test(
+                            ingroup=ingroup_seqs,
+                            outgroup=outgroup_seqs,
+                            reading_frame=reading_frame,
+                            num_bins=bins,
+                            bootstrap_replicates=bootstrap,
+                        )
+                    elif polarize_match:
+                        outgroup2_seqs = all_seqs.filter_by_name(polarize_match)
+                        if len(outgroup2_seqs) == 0:
+                            warnings.append(
+                                f"Warning: No outgroup2 sequences in {alignment_file.name}"
+                            )
+                            progress.advance(task)
+                            continue
+                        result = polarized_mk_test(
+                            ingroup=ingroup_seqs,
+                            outgroup1=outgroup_seqs,
+                            outgroup2=outgroup2_seqs,
+                            reading_frame=reading_frame,
+                        )
+                    else:
+                        result = mk_test(
+                            ingroup=ingroup_seqs,
+                            outgroup=outgroup_seqs,
+                            reading_frame=reading_frame,
+                        )
+                    results.append((alignment_file.stem, result))
+                except Exception as e:
+                    warnings.append(f"Error processing {alignment_file.name}: {e}")
+
+                progress.advance(task)
+
+        # Print warnings after progress bar completes
+        for warning in warnings:
+            click.echo(warning, err=True)
 
     else:
         # Separate files mode (original behavior)
@@ -525,70 +594,85 @@ def batch(
             return
 
         results = []
+        warnings = []
 
-        for ingroup_file in ingroup_files:
-            # Construct outgroup filename
-            base_name = ingroup_file.stem
-            if "_ingroup" in base_name:
-                outgroup_name = base_name.replace("_ingroup", "_outgroup") + ".fa"
-            elif "_in" in base_name:
-                outgroup_name = base_name.replace("_in", "_out") + ".fa"
-            else:
-                outgroup_name = base_name + "_outgroup.fa"
+        with create_rainbow_progress() as progress:
+            task = progress.add_task("Processing files", total=len(ingroup_files))
 
-            outgroup_file = input_dir / outgroup_name
-
-            if not outgroup_file.exists():
-                potential_matches = list(input_dir.glob(outgroup_pattern))
-                prefix = base_name.split("_")[0]
-                matches = [f for f in potential_matches if f.stem.startswith(prefix)]
-                if matches:
-                    outgroup_file = matches[0]
+            for ingroup_file in ingroup_files:
+                # Construct outgroup filename
+                base_name = ingroup_file.stem
+                if "_ingroup" in base_name:
+                    outgroup_name = base_name.replace("_ingroup", "_outgroup") + ".fa"
+                elif "_in" in base_name:
+                    outgroup_name = base_name.replace("_in", "_out") + ".fa"
                 else:
-                    click.echo(
-                        f"Warning: No outgroup found for {ingroup_file.name}", err=True
-                    )
-                    continue
+                    outgroup_name = base_name + "_outgroup.fa"
 
-            outgroup2_file: Path | None = None
-            if polarize_pattern:
-                potential_matches = list(input_dir.glob(polarize_pattern))
-                prefix = base_name.split("_")[0]
-                matches = [f for f in potential_matches if f.stem.startswith(prefix)]
-                if matches:
-                    outgroup2_file = matches[0]
-                else:
-                    click.echo(
-                        f"Warning: No second outgroup found for {ingroup_file.name}",
-                        err=True,
-                    )
-                    continue
+                outgroup_file = input_dir / outgroup_name
 
-            try:
-                if asymptotic:
-                    result = asymptotic_mk_test(
-                        ingroup=ingroup_file,
-                        outgroup=outgroup_file,
-                        reading_frame=reading_frame,
-                        num_bins=bins,
-                        bootstrap_replicates=bootstrap,
-                    )
-                elif polarize_pattern and outgroup2_file:
-                    result = polarized_mk_test(
-                        ingroup=ingroup_file,
-                        outgroup1=outgroup_file,
-                        outgroup2=outgroup2_file,
-                        reading_frame=reading_frame,
-                    )
-                else:
-                    result = mk_test(
-                        ingroup=ingroup_file,
-                        outgroup=outgroup_file,
-                        reading_frame=reading_frame,
-                    )
-                results.append((ingroup_file.stem, result))
-            except Exception as e:
-                click.echo(f"Error processing {ingroup_file.name}: {e}", err=True)
+                if not outgroup_file.exists():
+                    potential_matches = list(input_dir.glob(outgroup_pattern))
+                    prefix = base_name.split("_")[0]
+                    matches = [
+                        f for f in potential_matches if f.stem.startswith(prefix)
+                    ]
+                    if matches:
+                        outgroup_file = matches[0]
+                    else:
+                        warnings.append(
+                            f"Warning: No outgroup found for {ingroup_file.name}"
+                        )
+                        progress.advance(task)
+                        continue
+
+                outgroup2_file: Path | None = None
+                if polarize_pattern:
+                    potential_matches = list(input_dir.glob(polarize_pattern))
+                    prefix = base_name.split("_")[0]
+                    matches = [
+                        f for f in potential_matches if f.stem.startswith(prefix)
+                    ]
+                    if matches:
+                        outgroup2_file = matches[0]
+                    else:
+                        warnings.append(
+                            f"Warning: No second outgroup found for {ingroup_file.name}"
+                        )
+                        progress.advance(task)
+                        continue
+
+                try:
+                    if asymptotic:
+                        result = asymptotic_mk_test(
+                            ingroup=ingroup_file,
+                            outgroup=outgroup_file,
+                            reading_frame=reading_frame,
+                            num_bins=bins,
+                            bootstrap_replicates=bootstrap,
+                        )
+                    elif polarize_pattern and outgroup2_file:
+                        result = polarized_mk_test(
+                            ingroup=ingroup_file,
+                            outgroup1=outgroup_file,
+                            outgroup2=outgroup2_file,
+                            reading_frame=reading_frame,
+                        )
+                    else:
+                        result = mk_test(
+                            ingroup=ingroup_file,
+                            outgroup=outgroup_file,
+                            reading_frame=reading_frame,
+                        )
+                    results.append((ingroup_file.stem, result))
+                except Exception as e:
+                    warnings.append(f"Error processing {ingroup_file.name}: {e}")
+
+                progress.advance(task)
+
+        # Print warnings after progress bar completes
+        for warning in warnings:
+            click.echo(warning, err=True)
 
     if results:
         click.echo(format_batch_results(results, fmt))
