@@ -123,7 +123,9 @@ def format_batch_results(
         return json.dumps(data, indent=2)
 
     elif format == OutputFormat.TSV:
+        from mikado.analysis.asymptotic import AsymptoticMKResult
         from mikado.analysis.mk_test import MKResult
+        from mikado.analysis.polarized import PolarizedMKResult
 
         if not results:
             return ""
@@ -142,8 +144,36 @@ def format_batch_results(
                         f"{result.p_value:.6g}\t{ni_str}\t{alpha_str}"
                     )
             return "\n".join(lines)
+
+        elif isinstance(first_result, AsymptoticMKResult):
+            header = "gene\tDn\tDs\talpha_asymptotic\tCI_low\tCI_high\tmodel"
+            lines = [header]
+            for name, result in results:
+                if isinstance(result, AsymptoticMKResult):
+                    lines.append(
+                        f"{name}\t{result.dn}\t{result.ds}\t"
+                        f"{result.alpha_asymptotic:.6f}\t{result.ci_low:.6f}\t"
+                        f"{result.ci_high:.6f}\t{result.model_type}"
+                    )
+            return "\n".join(lines)
+
+        elif isinstance(first_result, PolarizedMKResult):
+            header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tNI\talpha"
+            lines = [header]
+            for name, result in results:
+                if isinstance(result, PolarizedMKResult):
+                    ni_str = f"{result.ni_ingroup:.6f}" if result.ni_ingroup is not None else "NA"
+                    alpha_str = f"{result.alpha_ingroup:.6f}" if result.alpha_ingroup is not None else "NA"
+                    lines.append(
+                        f"{name}\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
+                        f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
+                        f"{result.dn_outgroup}\t{result.ds_outgroup}\t"
+                        f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}"
+                    )
+            return "\n".join(lines)
+
         else:
-            # Fall back to JSON for complex types in batch
+            # Fall back to JSON for unknown types
             data = {name: result.to_dict() for name, result in results}
             return json.dumps(data, indent=2)
 
