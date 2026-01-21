@@ -14,7 +14,7 @@ A modern Python implementation of the McDonald-Kreitman test toolkit for detecti
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/mikado.git
+git clone https://github.com/andrewkern/mikado.git
 cd mikado
 
 # Install with uv
@@ -49,20 +49,20 @@ Mikado supports alignments where multiple species are in a single FASTA file, di
 
 ```bash
 # Run MK test on a combined alignment file
-# Sequences with "_gamb_" in the name are ingroup
-# Sequences with "_mel_" in the name are outgroup
-mikado test combined.fa combined.fa --ingroup-match "_gamb_" --outgroup-match "_mel_"
+# Sequences with "_agam_" in the name are ingroup
+# Sequences with "_afun_" in the name are outgroup
+mikado test combined.fa combined.fa --ingroup-match "_agam_" --outgroup-match "_afun_"
 
 # Polarized test with three species in one file
 mikado test combined.fa combined.fa \
-  --ingroup-match "_gamb_" \
-  --outgroup-match "_mel_" \
+  --ingroup-match "_agam_" \
+  --outgroup-match "_afun_" \
   --polarize-match "_amin_"
 
 # Asymptotic test with combined file
 mikado asymptotic combined.fa combined.fa \
-  --ingroup-match "_gamb_" \
-  --outgroup-match "_mel_"
+  --ingroup-match "_agam_" \
+  --outgroup-match "_afun_"
 ```
 
 ## Example Output
@@ -159,11 +159,11 @@ mikado batch genes/ -p "*_outgroup2.fa" --ingroup-pattern "*_in.fa" --outgroup-p
 
 # Combined file batch mode
 mikado batch alignments/ --file-pattern "*_aligned.fa" \
-  --ingroup-match "_gamb_" --outgroup-match "_mel_"
+  --ingroup-match "_agam_" --outgroup-match "_afun_"
 
 # Combined file with asymptotic test
 mikado batch alignments/ -a --file-pattern "*_aligned.fa" \
-  --ingroup-match "_gamb_" --outgroup-match "_mel_"
+  --ingroup-match "_agam_" --outgroup-match "_afun_"
 ```
 
 ### `mikado info`
