@@ -48,7 +48,6 @@ class RainbowBarColumn(BarColumn):
 
     def render(self, task):  # type: ignore[no-untyped-def]
         """Render the bar with rainbow colors."""
-        # Cycle through colors based on completed percentage
         if task.total:
             progress = task.completed / task.total
             color_idx = int(progress * len(self.RAINBOW_COLORS) * 3) % len(
@@ -59,7 +58,7 @@ class RainbowBarColumn(BarColumn):
             self._color_index = (self._color_index + 1) % len(self.RAINBOW_COLORS)
 
         self.complete_style = Style(color=self.RAINBOW_COLORS[color_idx])
-        self.finished_style = Style(color="#9400D3")  # Violet when done
+        self.finished_style = Style(color="#9400D3")
         return super().render(task)
 
 
@@ -75,27 +74,12 @@ def create_rainbow_progress() -> Progress:
 
 
 def get_worker_count(requested: int, num_tasks: int) -> int:
-    """Determine the optimal number of workers.
-
-    Args:
-        requested: Number of workers requested (0=auto, 1=sequential)
-        num_tasks: Number of tasks to process
-
-    Returns:
-        Number of workers to use
-    """
-    # Sequential mode if explicitly requested or too few tasks
+    """Determine the optimal number of workers."""
     if requested == 1 or num_tasks < 10:
         return 1
-
     cpu_count = os.cpu_count() or 4
-
     if requested > 0:
-        # User requested specific count, cap at CPU count
         return min(requested, cpu_count)
-
-    # Auto mode: use cpu_count - 1 (leave one for main process)
-    # but cap at number of tasks
     return max(1, min(cpu_count - 1, num_tasks))
 
 
@@ -104,22 +88,11 @@ def run_parallel_batch(
     num_workers: int,
     description: str,
 ) -> tuple[list[WorkerResult], list[str]]:
-    """Run batch processing with ProcessPoolExecutor.
-
-    Args:
-        tasks: List of BatchTask objects to process
-        num_workers: Number of worker processes (1 = sequential)
-        description: Description for progress bar
-
-    Returns:
-        Tuple of (results, warnings) where results are WorkerResult objects
-        and warnings are string messages
-    """
+    """Run batch processing with ProcessPoolExecutor."""
     results: list[WorkerResult] = []
     warnings: list[str] = []
 
     if num_workers == 1:
-        # Sequential mode - process in main process
         with create_rainbow_progress() as progress:
             task_id = progress.add_task(description, total=len(tasks))
             for task in tasks:
@@ -132,13 +105,10 @@ def run_parallel_batch(
                     results.append(worker_result)
                 progress.advance(task_id)
     else:
-        # Parallel mode
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             futures = {executor.submit(process_gene, task): task for task in tasks}
-
             with create_rainbow_progress() as progress:
                 task_id = progress.add_task(description, total=len(tasks))
-
                 for future in as_completed(futures):
                     try:
                         worker_result = future.result()
@@ -154,6 +124,19 @@ def run_parallel_batch(
                     progress.advance(task_id)
 
     return results, warnings
+
+
+def find_alignment_files(input_dir: Path) -> list[Path]:
+    """Auto-detect alignment files in a directory.
+
+    Tries common FASTA extensions in order: *.fa, *.fasta, *.fna
+    Returns files matching the first pattern that finds results.
+    """
+    for pattern in ["*.fa", "*.fasta", "*.fna"]:
+        files = sorted(input_dir.glob(pattern))
+        if files:
+            return files
+    return []
 
 
 def version_callback(value: bool) -> None:
@@ -185,116 +168,177 @@ def main(
 
 @app.command()
 def test(
-    ingroup: Annotated[
+    fasta: Annotated[
         Path,
-        typer.Argument(help="Path to FASTA file (ingroup sequences, or combined alignment)"),
+        typer.Argument(help="FASTA file (combined alignment, or ingroup sequences)"),
     ],
-    outgroup: Annotated[
+    outgroup_file: Annotated[
         Optional[Path],
-        typer.Argument(help="Path to FASTA file with outgroup sequences"),
+        typer.Argument(help="Outgroup FASTA file (only for separate files mode)"),
     ] = None,
-    polarize: Annotated[
-        Optional[Path],
-        typer.Option("--polarize", "-p", help="Second outgroup file for polarized MK test"),
-    ] = None,
+    # === Sequence filtering (combined file mode) ===
     ingroup_match: Annotated[
         Optional[str],
-        typer.Option(help="Filter pattern for ingroup sequences (combined file mode)"),
+        typer.Option(
+            "--ingroup-match", "-i",
+            help="Ingroup sequence name pattern (enables combined file mode)",
+        ),
     ] = None,
     outgroup_match: Annotated[
         Optional[str],
-        typer.Option(help="Filter pattern for outgroup sequences (combined file mode)"),
+        typer.Option(
+            "--outgroup-match", "-o",
+            help="Outgroup sequence name pattern (required with -i)",
+        ),
     ] = None,
     polarize_match: Annotated[
         Optional[str],
-        typer.Option(help="Filter pattern for second outgroup (combined file polarized mode)"),
+        typer.Option(
+            "--polarize-match",
+            help="Second outgroup pattern for polarized test (combined mode)",
+        ),
     ] = None,
+    # === Polarization (separate files mode) ===
+    polarize_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--polarize", "-p",
+            help="Second outgroup file for polarized test (separate files mode)",
+        ),
+    ] = None,
+    # === Analysis type ===
+    use_asymptotic: Annotated[
+        bool,
+        typer.Option(
+            "--asymptotic", "-a",
+            help="Use asymptotic MK test (accounts for slightly deleterious mutations)",
+        ),
+    ] = False,
+    # === Asymptotic options ===
+    bins: Annotated[
+        int,
+        typer.Option("--bins", "-b", help="Frequency bins for asymptotic test"),
+    ] = 10,
+    bootstrap: Annotated[
+        int,
+        typer.Option("--bootstrap", help="Bootstrap replicates for CI (asymptotic)"),
+    ] = 100,
+    # === Common options ===
     output_format: Annotated[
         str,
-        typer.Option("--format", "-f", help="Output format"),
+        typer.Option("--format", "-f", help="Output format: pretty, tsv, json"),
     ] = "pretty",
     reading_frame: Annotated[
         int,
-        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1, 2, or 3)"),
+        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1-3)"),
     ] = 1,
     pool_polymorphisms: Annotated[
         bool,
-        typer.Option(help="Pool polymorphisms from both populations (libsequence convention)"),
+        typer.Option("--pool-polymorphisms", help="Pool polymorphisms from both populations"),
     ] = False,
     min_freq: Annotated[
         float,
-        typer.Option(
-            "--min-freq",
-            help="Minimum derived allele frequency for polymorphisms (0.0-1.0)",
-        ),
+        typer.Option("--min-freq", help="Min derived allele frequency (0.0-1.0)"),
     ] = 0.0,
 ) -> None:
-    """Run the McDonald-Kreitman test.
+    """Run McDonald-Kreitman test on a single alignment.
 
-    Examples:
+    TWO MODES OF OPERATION:
 
+    1. COMBINED FILE MODE (recommended):
+       Use -i and -o to filter sequences by name pattern from a single alignment.
+
+       mikado test alignment.fa -i "speciesA" -o "speciesB"
+       mikado test alignment.fa -i "gamb" -o "002019" --asymptotic
+
+    2. SEPARATE FILES MODE:
+       Provide two FASTA files (ingroup and outgroup).
+
+       mikado test ingroup.fa outgroup.fa
+       mikado test ingroup.fa outgroup.fa -p outgroup2.fa  # polarized
+
+    ANALYSIS TYPES:
+
+    - Standard MK test (default): Classic McDonald-Kreitman test
+    - Asymptotic MK test (-a): Accounts for slightly deleterious mutations
+      by examining alpha across the frequency spectrum (Messer & Petrov 2013)
+
+    EXAMPLES:
+
+        mikado test alignment.fa -i "dmel" -o "dsim"
+        mikado test alignment.fa -i "dmel" -o "dsim" -a -b 20
+        mikado test alignment.fa -i "dmel" -o "dsim" --polarize-match "dyak"
         mikado test ingroup.fa outgroup.fa
-
-        mikado test ingroup.fa outgroup.fa -p outgroup2.fa
-
-        mikado test combined.fa --ingroup-match "gamb" --outgroup-match "002019"
-
-        mikado test combined.fa --ingroup-match "gamb" --outgroup-match "002019" --polarize-match "amin"
+        mikado test ingroup.fa outgroup.fa -a
     """
     from mikado.core.sequences import SequenceSet
 
     if output_format not in ("pretty", "tsv", "json"):
-        typer.echo(f"Error: Invalid format '{output_format}'. Must be pretty, tsv, or json.", err=True)
+        typer.echo(f"Error: Invalid format '{output_format}'.", err=True)
         raise typer.Exit(1)
 
     fmt = OutputFormat(output_format)
 
-    # Determine mode: separate files or combined file
+    # Determine mode
     combined_mode = ingroup_match is not None or outgroup_match is not None
 
     if combined_mode:
         # Combined file mode
         if not ingroup_match or not outgroup_match:
             typer.echo(
-                "Error: Combined mode requires both --ingroup-match and --outgroup-match",
+                "Error: Combined mode requires both -i/--ingroup-match and -o/--outgroup-match",
                 err=True,
             )
             raise typer.Exit(1)
 
-        if outgroup is not None:
+        if outgroup_file is not None:
             typer.echo(
-                "Error: Do not provide OUTGROUP file when using --ingroup-match/--outgroup-match",
+                "Error: Don't provide outgroup file when using -i/-o (combined mode)",
                 err=True,
             )
             raise typer.Exit(1)
 
-        # Load combined file and filter
-        all_seqs = SequenceSet.from_fasta(ingroup, reading_frame=reading_frame)
+        if polarize_file is not None:
+            typer.echo(
+                "Error: Use --polarize-match instead of -p in combined mode",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        # Load and filter sequences
+        all_seqs = SequenceSet.from_fasta(fasta, reading_frame=reading_frame)
         ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
         outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
 
         if len(ingroup_seqs) == 0:
-            typer.echo(
-                f"Error: No sequences match ingroup pattern '{ingroup_match}'", err=True
-            )
+            typer.echo(f"Error: No sequences match ingroup pattern '{ingroup_match}'", err=True)
             raise typer.Exit(1)
         if len(outgroup_seqs) == 0:
-            typer.echo(
-                f"Error: No sequences match outgroup pattern '{outgroup_match}'", err=True
-            )
+            typer.echo(f"Error: No sequences match outgroup pattern '{outgroup_match}'", err=True)
             raise typer.Exit(1)
 
         typer.echo(
-            f"Combined mode: {len(ingroup_seqs)} ingroup, {len(outgroup_seqs)} outgroup sequences",
+            f"Found {len(ingroup_seqs)} ingroup, {len(outgroup_seqs)} outgroup sequences",
             err=True,
         )
 
-        if polarize_match:
+        # Run appropriate test
+        if use_asymptotic:
+            if polarize_match:
+                typer.echo("Error: Polarized asymptotic test not supported", err=True)
+                raise typer.Exit(1)
+            result = asymptotic_mk_test(
+                ingroup=ingroup_seqs,
+                outgroup=outgroup_seqs,
+                reading_frame=reading_frame,
+                num_bins=bins,
+                bootstrap_replicates=bootstrap,
+                pool_polymorphisms=pool_polymorphisms,
+            )
+        elif polarize_match:
             outgroup2_seqs = all_seqs.filter_by_name(polarize_match)
             if len(outgroup2_seqs) == 0:
-                typer.echo(
-                    f"Error: No sequences match polarize pattern '{polarize_match}'", err=True
-                )
+                typer.echo(f"Error: No sequences match polarize pattern '{polarize_match}'", err=True)
                 raise typer.Exit(1)
             typer.echo(f"Polarizing with {len(outgroup2_seqs)} outgroup2 sequences", err=True)
             result = polarized_mk_test(
@@ -313,163 +357,53 @@ def test(
                 pool_polymorphisms=pool_polymorphisms,
                 min_frequency=min_freq,
             )
+
     else:
-        # Separate files mode (original behavior)
-        if outgroup is None:
+        # Separate files mode
+        if outgroup_file is None:
             typer.echo(
-                "Error: OUTGROUP file required (or use --ingroup-match/--outgroup-match for combined mode)",
+                "Error: Provide outgroup file, or use -i/-o for combined file mode",
                 err=True,
             )
             raise typer.Exit(1)
 
-        if polarize:
+        if polarize_match is not None:
+            typer.echo(
+                "Error: Use -p/--polarize instead of --polarize-match in separate files mode",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        # Run appropriate test
+        if use_asymptotic:
+            if polarize_file:
+                typer.echo("Error: Polarized asymptotic test not supported", err=True)
+                raise typer.Exit(1)
+            result = asymptotic_mk_test(
+                ingroup=fasta,
+                outgroup=outgroup_file,
+                reading_frame=reading_frame,
+                num_bins=bins,
+                bootstrap_replicates=bootstrap,
+                pool_polymorphisms=pool_polymorphisms,
+            )
+        elif polarize_file:
             result = polarized_mk_test(
-                ingroup=ingroup,
-                outgroup1=outgroup,
-                outgroup2=polarize,
+                ingroup=fasta,
+                outgroup1=outgroup_file,
+                outgroup2=polarize_file,
                 reading_frame=reading_frame,
                 pool_polymorphisms=pool_polymorphisms,
                 min_frequency=min_freq,
             )
         else:
             result = mk_test(
-                ingroup=ingroup,
-                outgroup=outgroup,
+                ingroup=fasta,
+                outgroup=outgroup_file,
                 reading_frame=reading_frame,
                 pool_polymorphisms=pool_polymorphisms,
                 min_frequency=min_freq,
             )
-
-    typer.echo(format_result(result, fmt))
-
-
-@app.command()
-def asymptotic(
-    ingroup: Annotated[
-        Path,
-        typer.Argument(help="Path to FASTA file (ingroup sequences, or combined alignment)"),
-    ],
-    outgroup: Annotated[
-        Optional[Path],
-        typer.Argument(help="Path to FASTA file with outgroup sequences"),
-    ] = None,
-    ingroup_match: Annotated[
-        Optional[str],
-        typer.Option(help="Filter pattern for ingroup sequences (combined file mode)"),
-    ] = None,
-    outgroup_match: Annotated[
-        Optional[str],
-        typer.Option(help="Filter pattern for outgroup sequences (combined file mode)"),
-    ] = None,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Output format"),
-    ] = "pretty",
-    reading_frame: Annotated[
-        int,
-        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1, 2, or 3)"),
-    ] = 1,
-    bins: Annotated[
-        int,
-        typer.Option("--bins", "-b", help="Number of frequency bins"),
-    ] = 10,
-    bootstrap: Annotated[
-        int,
-        typer.Option(help="Number of bootstrap replicates for CI"),
-    ] = 100,
-    pool_polymorphisms: Annotated[
-        bool,
-        typer.Option(help="Pool polymorphisms from both populations (libsequence convention)"),
-    ] = False,
-) -> None:
-    """Run the asymptotic McDonald-Kreitman test.
-
-    This method accounts for slightly deleterious mutations by examining
-    how alpha changes across the frequency spectrum.
-
-    Based on Messer & Petrov (2013) PNAS.
-
-    Examples:
-
-        mikado asymptotic ingroup.fa outgroup.fa
-
-        mikado asymptotic ingroup.fa outgroup.fa --bins 20
-
-        mikado asymptotic combined.fa --ingroup-match "gamb" --outgroup-match "002019"
-    """
-    from mikado.core.sequences import SequenceSet
-
-    if output_format not in ("pretty", "tsv", "json"):
-        typer.echo(f"Error: Invalid format '{output_format}'. Must be pretty, tsv, or json.", err=True)
-        raise typer.Exit(1)
-
-    fmt = OutputFormat(output_format)
-
-    # Determine mode: separate files or combined file
-    combined_mode = ingroup_match is not None or outgroup_match is not None
-
-    if combined_mode:
-        # Combined file mode
-        if not ingroup_match or not outgroup_match:
-            typer.echo(
-                "Error: Combined mode requires both --ingroup-match and --outgroup-match",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-        if outgroup is not None:
-            typer.echo(
-                "Error: Do not provide OUTGROUP file when using --ingroup-match/--outgroup-match",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-        # Load combined file and filter
-        all_seqs = SequenceSet.from_fasta(ingroup, reading_frame=reading_frame)
-        ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
-        outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
-
-        if len(ingroup_seqs) == 0:
-            typer.echo(
-                f"Error: No sequences match ingroup pattern '{ingroup_match}'", err=True
-            )
-            raise typer.Exit(1)
-        if len(outgroup_seqs) == 0:
-            typer.echo(
-                f"Error: No sequences match outgroup pattern '{outgroup_match}'", err=True
-            )
-            raise typer.Exit(1)
-
-        typer.echo(
-            f"Combined mode: {len(ingroup_seqs)} ingroup, {len(outgroup_seqs)} outgroup sequences",
-            err=True,
-        )
-
-        result = asymptotic_mk_test(
-            ingroup=ingroup_seqs,
-            outgroup=outgroup_seqs,
-            reading_frame=reading_frame,
-            num_bins=bins,
-            bootstrap_replicates=bootstrap,
-            pool_polymorphisms=pool_polymorphisms,
-        )
-    else:
-        # Separate files mode (original behavior)
-        if outgroup is None:
-            typer.echo(
-                "Error: OUTGROUP file required (or use --ingroup-match/--outgroup-match for combined mode)",
-                err=True,
-            )
-            raise typer.Exit(1)
-
-        result = asymptotic_mk_test(
-            ingroup=ingroup,
-            outgroup=outgroup,
-            reading_frame=reading_frame,
-            num_bins=bins,
-            bootstrap_replicates=bootstrap,
-            pool_polymorphisms=pool_polymorphisms,
-        )
 
     typer.echo(format_result(result, fmt))
 
@@ -478,114 +412,142 @@ def asymptotic(
 def batch(
     input_dir: Annotated[
         Path,
-        typer.Argument(help="Directory containing FASTA files"),
+        typer.Argument(help="Directory containing FASTA alignment files"),
     ],
-    file_pattern: Annotated[
-        str,
-        typer.Option(help="Glob pattern to match alignment files (combined mode)"),
-    ] = "*.fa",
-    outgroup_pattern: Annotated[
-        str,
-        typer.Option(help="Glob pattern to match outgroup files (separate files mode)"),
-    ] = "*_outgroup.fa",
-    ingroup_pattern: Annotated[
-        str,
-        typer.Option(help="Glob pattern to match ingroup files (separate files mode)"),
-    ] = "*_ingroup.fa",
+    # === Sequence filtering (combined file mode) ===
     ingroup_match: Annotated[
         Optional[str],
-        typer.Option(help="Filter pattern for ingroup sequences (combined file mode)"),
+        typer.Option(
+            "--ingroup-match", "-i",
+            help="Ingroup sequence name pattern (enables combined file mode)",
+        ),
     ] = None,
     outgroup_match: Annotated[
         Optional[str],
-        typer.Option(help="Filter pattern for outgroup sequences (combined file mode)"),
+        typer.Option(
+            "--outgroup-match", "-o",
+            help="Outgroup sequence name pattern (required with -i)",
+        ),
     ] = None,
     polarize_match: Annotated[
         Optional[str],
-        typer.Option(help="Filter pattern for second outgroup (combined file polarized mode)"),
+        typer.Option(
+            "--polarize-match",
+            help="Second outgroup pattern for polarized test",
+        ),
     ] = None,
-    output_format: Annotated[
+    # === File patterns ===
+    file_pattern: Annotated[
+        Optional[str],
+        typer.Option(
+            "--pattern",
+            help="File glob pattern (default: auto-detect *.fa, *.fasta, *.fna)",
+        ),
+    ] = None,
+    # === Separate files mode options ===
+    ingroup_pattern: Annotated[
         str,
-        typer.Option("--format", "-f", help="Output format"),
-    ] = "tsv",
-    reading_frame: Annotated[
-        int,
-        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1, 2, or 3)"),
-    ] = 1,
-    use_asymptotic: Annotated[
-        bool,
-        typer.Option("--asymptotic", "-a", help="Use asymptotic MK test instead of standard"),
-    ] = False,
+        typer.Option(help="Ingroup file pattern (separate files mode)"),
+    ] = "*_ingroup.fa",
+    outgroup_pattern: Annotated[
+        str,
+        typer.Option(help="Outgroup file pattern (separate files mode)"),
+    ] = "*_outgroup.fa",
     polarize_pattern: Annotated[
         Optional[str],
-        typer.Option("--polarize-pattern", "-p", help="Glob pattern for second outgroup files (separate files polarized mode)"),
+        typer.Option(
+            "--polarize-pattern",
+            help="Second outgroup file pattern (separate files polarized mode)",
+        ),
     ] = None,
-    bins: Annotated[
-        int,
-        typer.Option("--bins", "-b", help="Number of frequency bins (asymptotic only)"),
-    ] = 10,
-    bootstrap: Annotated[
-        int,
-        typer.Option(help="Bootstrap replicates for CI (asymptotic only)"),
-    ] = 100,
-    pool_polymorphisms: Annotated[
+    # === Analysis type ===
+    use_asymptotic: Annotated[
         bool,
-        typer.Option(help="Pool polymorphisms from both populations (libsequence convention)"),
+        typer.Option(
+            "--asymptotic", "-a",
+            help="Use asymptotic MK test",
+        ),
     ] = False,
     aggregate: Annotated[
         bool,
         typer.Option(
             "--aggregate/--per-gene",
-            help="Aggregate data across genes (default) vs per-gene analysis (asymptotic only)",
+            help="Aggregate across genes (default) or per-gene results (asymptotic)",
         ),
     ] = True,
+    # === Asymptotic options ===
+    bins: Annotated[
+        int,
+        typer.Option("--bins", "-b", help="Frequency bins (asymptotic)"),
+    ] = 10,
+    bootstrap: Annotated[
+        int,
+        typer.Option("--bootstrap", help="Bootstrap replicates (asymptotic)"),
+    ] = 100,
     freq_cutoffs: Annotated[
         str,
-        typer.Option(
-            "--freq-cutoffs",
-            help="Frequency range for fitting as 'low,high' (asymptotic only)",
-        ),
+        typer.Option("--freq-cutoffs", help="Frequency range 'low,high' (asymptotic)"),
     ] = "0.1,0.9",
+    # === Common options ===
+    output_format: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format: pretty, tsv, json"),
+    ] = "tsv",
+    reading_frame: Annotated[
+        int,
+        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1-3)"),
+    ] = 1,
+    pool_polymorphisms: Annotated[
+        bool,
+        typer.Option("--pool-polymorphisms", help="Pool polymorphisms from both populations"),
+    ] = False,
     min_freq: Annotated[
         float,
-        typer.Option(
-            "--min-freq",
-            help="Minimum derived allele frequency for polymorphisms (standard MK only)",
-        ),
+        typer.Option("--min-freq", help="Min derived allele frequency"),
     ] = 0.0,
     workers: Annotated[
         int,
-        typer.Option(
-            "--workers",
-            "-w",
-            help="Number of parallel workers (0=auto, 1=sequential)",
-            min=0,
-        ),
+        typer.Option("--workers", "-w", min=0, help="Parallel workers (0=auto, 1=sequential)"),
     ] = 0,
 ) -> None:
-    """Run MK test on multiple gene files.
+    """Run MK test on multiple alignment files.
 
-    Supports two modes:
+    TWO MODES OF OPERATION:
 
-    1. Separate files mode (default): Pairs of ingroup/outgroup FASTA files
+    1. COMBINED FILE MODE (recommended):
+       Each file contains sequences from multiple species.
+       Use -i and -o to filter by sequence name pattern.
+       Mode is auto-detected when -i is provided.
 
-    2. Combined files mode: Single alignment files with sequences from multiple species,
-       filtered by --ingroup-match and --outgroup-match patterns
+       mikado batch alignments/ -i "speciesA" -o "speciesB"
 
-    Examples (separate files mode):
+    2. SEPARATE FILES MODE:
+       Pairs of ingroup/outgroup files (e.g., gene1_ingroup.fa, gene1_outgroup.fa).
+       Used when -i is NOT provided.
 
+       mikado batch genes/ --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"
+
+    FILE DETECTION:
+       Files are auto-detected by trying *.fa, *.fasta, *.fna in order.
+       Override with --pattern "*.your_extension"
+
+    ANALYSIS TYPES:
+
+    - Standard MK test (default): Per-gene Dn, Ds, Pn, Ps
+    - Asymptotic MK (-a): Genome-wide alpha with frequency correction
+      - --aggregate (default): Pool data across genes, fit single curve
+      - --per-gene: Fit curve for each gene separately
+
+    EXAMPLES:
+
+        mikado batch alignments/ -i "dmel" -o "dsim"
+        mikado batch alignments/ -i "dmel" -o "dsim" -a
+        mikado batch alignments/ -i "dmel" -o "dsim" -a --per-gene
+        mikado batch alignments/ -i "dmel" -o "dsim" -w 8
         mikado batch genes/ --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"
-
-        mikado batch genes/ --asymptotic --bins 10
-
-    Examples (combined files mode):
-
-        mikado batch alignments/ --file-pattern "*.fasta" --ingroup-match "gamb" --outgroup-match "002019"
-
-        mikado batch alignments/ --file-pattern "*.fasta" --ingroup-match "gamb" --outgroup-match "002019" --polarize-match "amin"
     """
     if output_format not in ("pretty", "tsv", "json"):
-        typer.echo(f"Error: Invalid format '{output_format}'. Must be pretty, tsv, or json.", err=True)
+        typer.echo(f"Error: Invalid format '{output_format}'.", err=True)
         raise typer.Exit(1)
 
     fmt = OutputFormat(output_format)
@@ -595,44 +557,39 @@ def batch(
         cutoff_parts = freq_cutoffs.split(",")
         frequency_cutoffs = (float(cutoff_parts[0]), float(cutoff_parts[1]))
     except (ValueError, IndexError):
-        typer.echo(
-            f"Error: Invalid frequency cutoffs '{freq_cutoffs}'. Use format 'low,high'",
-            err=True,
-        )
+        typer.echo(f"Error: Invalid frequency cutoffs '{freq_cutoffs}'. Use 'low,high'", err=True)
         raise typer.Exit(1)
 
-    # Determine mode: combined files or separate files
-    combined_mode = ingroup_match is not None or outgroup_match is not None
+    # Auto-detect mode based on -i flag
+    combined_mode = ingroup_match is not None
 
     if combined_mode:
-        # Combined files mode
-        if not ingroup_match or not outgroup_match:
-            typer.echo(
-                "Error: Combined mode requires both --ingroup-match and --outgroup-match",
-                err=True,
-            )
-            return
+        # === COMBINED FILE MODE ===
+        if not outgroup_match:
+            typer.echo("Error: -o/--outgroup-match required with -i/--ingroup-match", err=True)
+            raise typer.Exit(1)
 
-        # Check for mutually exclusive options
         if use_asymptotic and polarize_match:
-            typer.echo(
-                "Error: --asymptotic and --polarize-match are mutually exclusive", err=True
-            )
-            return
+            typer.echo("Error: --asymptotic and --polarize-match are mutually exclusive", err=True)
+            raise typer.Exit(1)
 
-        # Find all alignment files
-        alignment_files = sorted(input_dir.glob(file_pattern))
+        # Find alignment files
+        if file_pattern:
+            alignment_files = sorted(input_dir.glob(file_pattern))
+        else:
+            alignment_files = find_alignment_files(input_dir)
 
         if not alignment_files:
-            typer.echo(
-                f"No files matching '{file_pattern}' found in {input_dir}", err=True
-            )
-            return
+            pattern_msg = file_pattern or "*.fa, *.fasta, *.fna"
+            typer.echo(f"No files found in {input_dir} (tried: {pattern_msg})", err=True)
+            raise typer.Exit(1)
 
-        # Determine number of workers
+        typer.echo(f"Found {len(alignment_files)} alignment files", err=True)
+
+        # Determine workers
         num_workers = get_worker_count(workers, len(alignment_files))
 
-        # Build task list
+        # Build tasks
         tasks = [
             BatchTask(
                 file_path=f,
@@ -650,7 +607,7 @@ def batch(
             for f in alignment_files
         ]
 
-        # Aggregated asymptotic mode: extract data, then aggregate
+        # Aggregated asymptotic mode
         if use_asymptotic and aggregate:
             from mikado.analysis.asymptotic import PolymorphismData
 
@@ -658,7 +615,6 @@ def batch(
                 tasks, num_workers, "Extracting polymorphism data"
             )
 
-            # Print warnings
             for warning in warnings:
                 typer.echo(warning, err=True)
 
@@ -667,11 +623,10 @@ def batch(
             ]
 
             if gene_data_list:
-                # Run aggregated analysis
                 result = asymptotic_mk_test_aggregated(
                     gene_data=gene_data_list,
                     num_bins=bins,
-                    ci_replicates=bootstrap * 100,  # More replicates for Monte Carlo
+                    ci_replicates=bootstrap * 100,
                     frequency_cutoffs=frequency_cutoffs,
                 )
                 typer.echo(format_result(result, fmt))
@@ -684,32 +639,25 @@ def batch(
             tasks, num_workers, "Processing alignments"
         )
 
-        # Print warnings after progress bar completes
         for warning in warnings:
             typer.echo(warning, err=True)
 
-        # Convert to results format
         results = [(r.gene_id, r.result) for r in worker_results]
 
     else:
-        # Separate files mode (original behavior)
-        # Check for mutually exclusive options
+        # === SEPARATE FILES MODE ===
         if use_asymptotic and polarize_pattern:
-            typer.echo(
-                "Error: --asymptotic and --polarize-pattern are mutually exclusive", err=True
-            )
-            return
+            typer.echo("Error: --asymptotic and --polarize-pattern are mutually exclusive", err=True)
+            raise typer.Exit(1)
 
-        # Find all ingroup files
         ingroup_files = sorted(input_dir.glob(ingroup_pattern))
 
         if not ingroup_files:
-            typer.echo(
-                f"No files matching '{ingroup_pattern}' found in {input_dir}", err=True
-            )
-            return
+            typer.echo(f"No files matching '{ingroup_pattern}' in {input_dir}", err=True)
+            raise typer.Exit(1)
 
-        # Helper function to find outgroup file
+        typer.echo(f"Found {len(ingroup_files)} ingroup files", err=True)
+
         def find_outgroup_file(ingroup_file: Path) -> Path | None:
             base_name = ingroup_file.stem
             if "_ingroup" in base_name:
@@ -720,53 +668,39 @@ def batch(
                 outgroup_name = base_name + "_outgroup.fa"
 
             outgroup_file_path = input_dir / outgroup_name
-
             if not outgroup_file_path.exists():
                 potential_matches = list(input_dir.glob(outgroup_pattern))
                 prefix = base_name.split("_")[0]
-                matches = [
-                    f for f in potential_matches if f.stem.startswith(prefix)
-                ]
+                matches = [f for f in potential_matches if f.stem.startswith(prefix)]
                 if matches:
                     return matches[0]
                 return None
             return outgroup_file_path
 
-        # Helper function to find second outgroup file
         def find_outgroup2_file(ingroup_file: Path) -> Path | None:
             if not polarize_pattern:
                 return None
             base_name = ingroup_file.stem
             potential_matches = list(input_dir.glob(polarize_pattern))
             prefix = base_name.split("_")[0]
-            matches = [
-                f for f in potential_matches if f.stem.startswith(prefix)
-            ]
-            if matches:
-                return matches[0]
-            return None
+            matches = [f for f in potential_matches if f.stem.startswith(prefix)]
+            return matches[0] if matches else None
 
-        # Determine number of workers
         num_workers = get_worker_count(workers, len(ingroup_files))
 
-        # Build task list
         tasks = []
         pre_warnings = []
         for ingroup_file in ingroup_files:
             outgroup_file = find_outgroup_file(ingroup_file)
             if outgroup_file is None:
-                pre_warnings.append(
-                    f"Warning: No outgroup found for {ingroup_file.name}"
-                )
+                pre_warnings.append(f"Warning: No outgroup for {ingroup_file.name}")
                 continue
 
             outgroup2_file: Path | None = None
             if polarize_pattern:
                 outgroup2_file = find_outgroup2_file(ingroup_file)
                 if outgroup2_file is None:
-                    pre_warnings.append(
-                        f"Warning: No second outgroup found for {ingroup_file.name}"
-                    )
+                    pre_warnings.append(f"Warning: No second outgroup for {ingroup_file.name}")
                     continue
 
             tasks.append(
@@ -784,15 +718,14 @@ def batch(
                 )
             )
 
-        # Print pre-processing warnings
         for warning in pre_warnings:
             typer.echo(warning, err=True)
 
         if not tasks:
             typer.echo("No valid file pairs found", err=True)
-            return
+            raise typer.Exit(1)
 
-        # Aggregated asymptotic mode: extract data, then aggregate
+        # Aggregated asymptotic mode
         if use_asymptotic and aggregate:
             from mikado.analysis.asymptotic import PolymorphismData
 
@@ -800,7 +733,6 @@ def batch(
                 tasks, num_workers, "Extracting polymorphism data"
             )
 
-            # Print warnings
             for warning in warnings:
                 typer.echo(warning, err=True)
 
@@ -825,11 +757,9 @@ def batch(
             tasks, num_workers, "Processing files"
         )
 
-        # Print warnings after progress bar completes
         for warning in warnings:
             typer.echo(warning, err=True)
 
-        # Convert to results format
         results = [(r.gene_id, r.result) for r in worker_results]
 
     if results:
@@ -846,13 +776,10 @@ def info(
     ],
     reading_frame: Annotated[
         int,
-        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1, 2, or 3)"),
+        typer.Option("--reading-frame", "-r", min=1, max=3, help="Reading frame (1-3)"),
     ] = 1,
 ) -> None:
-    """Display information about a FASTA file.
-
-    Shows sequence count, alignment length, and codon statistics.
-    """
+    """Display information about a FASTA file."""
     from mikado.core.sequences import SequenceSet
 
     seqs = SequenceSet.from_fasta(fasta, reading_frame=reading_frame)
@@ -865,11 +792,9 @@ def info(
         typer.echo(f"Codons: {seqs.num_codons}")
         typer.echo(f"Reading frame: {reading_frame}")
 
-        # Count polymorphic sites
         poly_sites = seqs.polymorphic_codons()
         typer.echo(f"Polymorphic codons: {len(poly_sites)}")
 
-        # List sequence names
         typer.echo("\nSequences:")
         for seq in seqs.sequences:
             typer.echo(f"  {seq.name} ({len(seq)} bp)")
