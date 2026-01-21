@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from rich.console import Console
 from rich.progress import (
     BarColumn,
     Progress,
@@ -27,6 +28,9 @@ from mikado.analysis.mk_test import mk_test
 from mikado.analysis.polarized import polarized_mk_test
 from mikado.batch_workers import BatchTask, WorkerResult, process_gene
 from mikado.io.output import OutputFormat, format_batch_results, format_result
+
+# Console that writes to stderr (so progress doesn't mix with data output)
+stderr_console = Console(stderr=True)
 
 
 class RainbowBarColumn(BarColumn):
@@ -63,13 +67,14 @@ class RainbowBarColumn(BarColumn):
 
 
 def create_rainbow_progress() -> Progress:
-    """Create a rainbow-colored progress bar."""
+    """Create a rainbow-colored progress bar that writes to stderr."""
     return Progress(
         SpinnerColumn(style="bold magenta"),
         TextColumn("[bold blue]{task.description}"),
         RainbowBarColumn(),
         TaskProgressColumn(),
         TimeElapsedColumn(),
+        console=stderr_console,
     )
 
 
