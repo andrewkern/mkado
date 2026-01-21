@@ -250,3 +250,19 @@ class SequenceSet:
             return 1.0
 
         return 1.0 - freqs[ancestral_codon]
+
+    def filter_by_name(self, pattern: str) -> SequenceSet:
+        """Filter sequences by name pattern (substring match).
+
+        Args:
+            pattern: Substring to match in sequence names
+
+        Returns:
+            New SequenceSet containing only matching sequences
+        """
+        filtered = [seq for seq in self.sequences if pattern in seq.name]
+        return SequenceSet(
+            sequences=filtered,
+            reading_frame=self.reading_frame,
+            genetic_code=self.genetic_code,
+        )

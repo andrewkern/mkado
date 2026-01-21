@@ -1,6 +1,7 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+CLAUDE.md
 build/
 dist/
 wheels/

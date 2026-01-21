@@ -26,12 +26,24 @@ def main() -> None:
 
 @main.command()
 @click.argument("ingroup", type=click.Path(exists=True, path_type=Path))
-@click.argument("outgroup", type=click.Path(exists=True, path_type=Path))
+@click.argument("outgroup", type=click.Path(exists=True, path_type=Path), required=False)
 @click.option(
     "-p",
     "--polarize",
     type=click.Path(exists=True, path_type=Path),
-    help="Second outgroup for polarized MK test",
+    help="Second outgroup file for polarized MK test",
+)
+@click.option(
+    "--ingroup-match",
+    help="Filter pattern for ingroup sequences (combined file mode)",
+)
+@click.option(
+    "--outgroup-match",
+    help="Filter pattern for outgroup sequences (combined file mode)",
+)
+@click.option(
+    "--polarize-match",
+    help="Filter pattern for second outgroup (combined file polarized mode)",
 )
 @click.option(
     "-f",
@@ -50,16 +62,19 @@ def main() -> None:
 )
 def test(
     ingroup: Path,
-    outgroup: Path,
+    outgroup: Path | None,
     polarize: Path | None,
+    ingroup_match: str | None,
+    outgroup_match: str | None,
+    polarize_match: str | None,
     output_format: str,
     reading_frame: int,
 ) -> None:
     """Run the McDonald-Kreitman test.
 
-    INGROUP: Path to FASTA file with ingroup sequences (e.g., population sample)
+    INGROUP: Path to FASTA file (ingroup sequences, or combined alignment)
 
-    OUTGROUP: Path to FASTA file with outgroup sequences
+    OUTGROUP: Path to FASTA file with outgroup sequences (optional if using combined mode)
 
     Examples:
 
@@ -67,30 +82,111 @@ def test(
 
         mikado test ingroup.fa outgroup.fa -p outgroup2.fa
 
-        mikado test ingroup.fa outgroup.fa --format tsv
+        mikado test combined.fa --ingroup-match "gamb" --outgroup-match "002019"
+
+        mikado test combined.fa --ingroup-match "gamb" --outgroup-match "002019" --polarize-match "amin"
     """
+    from mikado.core.sequences import SequenceSet
+
     fmt = OutputFormat(output_format)
 
-    if polarize:
-        result = polarized_mk_test(
-            ingroup=ingroup,
-            outgroup1=outgroup,
-            outgroup2=polarize,
-            reading_frame=reading_frame,
+    # Determine mode: separate files or combined file
+    combined_mode = ingroup_match is not None or outgroup_match is not None
+
+    if combined_mode:
+        # Combined file mode
+        if not ingroup_match or not outgroup_match:
+            click.echo(
+                "Error: Combined mode requires both --ingroup-match and --outgroup-match",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        if outgroup is not None:
+            click.echo(
+                "Error: Do not provide OUTGROUP file when using --ingroup-match/--outgroup-match",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        # Load combined file and filter
+        all_seqs = SequenceSet.from_fasta(ingroup, reading_frame=reading_frame)
+        ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
+        outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
+
+        if len(ingroup_seqs) == 0:
+            click.echo(
+                f"Error: No sequences match ingroup pattern '{ingroup_match}'", err=True
+            )
+            raise SystemExit(1)
+        if len(outgroup_seqs) == 0:
+            click.echo(
+                f"Error: No sequences match outgroup pattern '{outgroup_match}'", err=True
+            )
+            raise SystemExit(1)
+
+        click.echo(
+            f"Combined mode: {len(ingroup_seqs)} ingroup, {len(outgroup_seqs)} outgroup sequences",
+            err=True,
         )
+
+        if polarize_match:
+            outgroup2_seqs = all_seqs.filter_by_name(polarize_match)
+            if len(outgroup2_seqs) == 0:
+                click.echo(
+                    f"Error: No sequences match polarize pattern '{polarize_match}'", err=True
+                )
+                raise SystemExit(1)
+            click.echo(f"Polarizing with {len(outgroup2_seqs)} outgroup2 sequences", err=True)
+            result = polarized_mk_test(
+                ingroup=ingroup_seqs,
+                outgroup1=outgroup_seqs,
+                outgroup2=outgroup2_seqs,
+                reading_frame=reading_frame,
+            )
+        else:
+            result = mk_test(
+                ingroup=ingroup_seqs,
+                outgroup=outgroup_seqs,
+                reading_frame=reading_frame,
+            )
     else:
-        result = mk_test(
-            ingroup=ingroup,
-            outgroup=outgroup,
-            reading_frame=reading_frame,
-        )
+        # Separate files mode (original behavior)
+        if outgroup is None:
+            click.echo(
+                "Error: OUTGROUP file required (or use --ingroup-match/--outgroup-match for combined mode)",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        if polarize:
+            result = polarized_mk_test(
+                ingroup=ingroup,
+                outgroup1=outgroup,
+                outgroup2=polarize,
+                reading_frame=reading_frame,
+            )
+        else:
+            result = mk_test(
+                ingroup=ingroup,
+                outgroup=outgroup,
+                reading_frame=reading_frame,
+            )
 
     click.echo(format_result(result, fmt))
 
 
 @main.command()
 @click.argument("ingroup", type=click.Path(exists=True, path_type=Path))
-@click.argument("outgroup", type=click.Path(exists=True, path_type=Path))
+@click.argument("outgroup", type=click.Path(exists=True, path_type=Path), required=False)
+@click.option(
+    "--ingroup-match",
+    help="Filter pattern for ingroup sequences (combined file mode)",
+)
+@click.option(
+    "--outgroup-match",
+    help="Filter pattern for outgroup sequences (combined file mode)",
+)
 @click.option(
     "-f",
     "--format",
@@ -121,7 +217,9 @@ def test(
 )
 def asymptotic(
     ingroup: Path,
-    outgroup: Path,
+    outgroup: Path | None,
+    ingroup_match: str | None,
+    outgroup_match: str | None,
     output_format: str,
     reading_frame: int,
     bins: int,
@@ -134,40 +232,117 @@ def asymptotic(
 
     Based on Messer & Petrov (2013) PNAS.
 
-    INGROUP: Path to FASTA file with ingroup sequences
+    INGROUP: Path to FASTA file (ingroup sequences, or combined alignment)
 
-    OUTGROUP: Path to FASTA file with outgroup sequences
+    OUTGROUP: Path to FASTA file with outgroup sequences (optional if using combined mode)
 
     Examples:
 
         mikado asymptotic ingroup.fa outgroup.fa
 
         mikado asymptotic ingroup.fa outgroup.fa --bins 20
+
+        mikado asymptotic combined.fa --ingroup-match "gamb" --outgroup-match "002019"
     """
+    from mikado.core.sequences import SequenceSet
+
     fmt = OutputFormat(output_format)
 
-    result = asymptotic_mk_test(
-        ingroup=ingroup,
-        outgroup=outgroup,
-        reading_frame=reading_frame,
-        num_bins=bins,
-        bootstrap_replicates=bootstrap,
-    )
+    # Determine mode: separate files or combined file
+    combined_mode = ingroup_match is not None or outgroup_match is not None
+
+    if combined_mode:
+        # Combined file mode
+        if not ingroup_match or not outgroup_match:
+            click.echo(
+                "Error: Combined mode requires both --ingroup-match and --outgroup-match",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        if outgroup is not None:
+            click.echo(
+                "Error: Do not provide OUTGROUP file when using --ingroup-match/--outgroup-match",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        # Load combined file and filter
+        all_seqs = SequenceSet.from_fasta(ingroup, reading_frame=reading_frame)
+        ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
+        outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
+
+        if len(ingroup_seqs) == 0:
+            click.echo(
+                f"Error: No sequences match ingroup pattern '{ingroup_match}'", err=True
+            )
+            raise SystemExit(1)
+        if len(outgroup_seqs) == 0:
+            click.echo(
+                f"Error: No sequences match outgroup pattern '{outgroup_match}'", err=True
+            )
+            raise SystemExit(1)
+
+        click.echo(
+            f"Combined mode: {len(ingroup_seqs)} ingroup, {len(outgroup_seqs)} outgroup sequences",
+            err=True,
+        )
+
+        result = asymptotic_mk_test(
+            ingroup=ingroup_seqs,
+            outgroup=outgroup_seqs,
+            reading_frame=reading_frame,
+            num_bins=bins,
+            bootstrap_replicates=bootstrap,
+        )
+    else:
+        # Separate files mode (original behavior)
+        if outgroup is None:
+            click.echo(
+                "Error: OUTGROUP file required (or use --ingroup-match/--outgroup-match for combined mode)",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        result = asymptotic_mk_test(
+            ingroup=ingroup,
+            outgroup=outgroup,
+            reading_frame=reading_frame,
+            num_bins=bins,
+            bootstrap_replicates=bootstrap,
+        )
 
     click.echo(format_result(result, fmt))
 
 
 @main.command()
-@click.argument("ingroup_dir", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_dir", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--file-pattern",
+    default="*.fa",
+    help="Glob pattern to match alignment files (combined mode)",
+)
 @click.option(
     "--outgroup-pattern",
     default="*_outgroup.fa",
-    help="Glob pattern to match outgroup files",
+    help="Glob pattern to match outgroup files (separate files mode)",
 )
 @click.option(
     "--ingroup-pattern",
     default="*_ingroup.fa",
-    help="Glob pattern to match ingroup files",
+    help="Glob pattern to match ingroup files (separate files mode)",
+)
+@click.option(
+    "--ingroup-match",
+    help="Filter pattern for ingroup sequences (combined file mode)",
+)
+@click.option(
+    "--outgroup-match",
+    help="Filter pattern for outgroup sequences (combined file mode)",
+)
+@click.option(
+    "--polarize-match",
+    help="Filter pattern for second outgroup (combined file polarized mode)",
 )
 @click.option(
     "-f",
@@ -194,7 +369,7 @@ def asymptotic(
     "-p",
     "--polarize-pattern",
     default=None,
-    help="Glob pattern for second outgroup (enables polarized MK test)",
+    help="Glob pattern for second outgroup files (separate files polarized mode)",
 )
 @click.option(
     "-b",
@@ -210,9 +385,13 @@ def asymptotic(
     help="Bootstrap replicates for CI (asymptotic only)",
 )
 def batch(
-    ingroup_dir: Path,
+    input_dir: Path,
+    file_pattern: str,
     outgroup_pattern: str,
     ingroup_pattern: str,
+    ingroup_match: str | None,
+    outgroup_match: str | None,
+    polarize_match: str | None,
     output_format: str,
     reading_frame: int,
     asymptotic: bool,
@@ -222,99 +401,194 @@ def batch(
 ) -> None:
     """Run MK test on multiple gene files.
 
-    Expects paired ingroup/outgroup files with matching prefixes.
+    Supports two modes:
 
-    INGROUP_DIR: Directory containing FASTA files
+    1. Separate files mode (default): Pairs of ingroup/outgroup FASTA files
 
-    Examples:
+    2. Combined files mode: Single alignment files with sequences from multiple species,
+       filtered by --ingroup-match and --outgroup-match patterns
+
+    INPUT_DIR: Directory containing FASTA files
+
+    Examples (separate files mode):
 
         mikado batch genes/ --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"
 
         mikado batch genes/ --asymptotic --bins 10
 
-        mikado batch genes/ -p "*_outgroup2.fa"  # polarized MK test
+    Examples (combined files mode):
+
+        mikado batch alignments/ --file-pattern "*.fasta" --ingroup-match "gamb" --outgroup-match "002019"
+
+        mikado batch alignments/ --file-pattern "*.fasta" --ingroup-match "gamb" --outgroup-match "002019" --polarize-match "amin"
     """
+    from mikado.core.sequences import SequenceSet
+
     fmt = OutputFormat(output_format)
 
-    # Check for mutually exclusive options
-    if asymptotic and polarize_pattern:
-        click.echo("Error: --asymptotic and --polarize-pattern are mutually exclusive", err=True)
-        return
+    # Determine mode: combined files or separate files
+    combined_mode = ingroup_match is not None or outgroup_match is not None
 
-    # Find all ingroup files
-    ingroup_files = sorted(ingroup_dir.glob(ingroup_pattern))
+    if combined_mode:
+        # Combined files mode
+        if not ingroup_match or not outgroup_match:
+            click.echo(
+                "Error: Combined mode requires both --ingroup-match and --outgroup-match",
+                err=True,
+            )
+            return
 
-    if not ingroup_files:
-        click.echo(f"No files matching '{ingroup_pattern}' found in {ingroup_dir}", err=True)
-        return
+        # Check for mutually exclusive options
+        if asymptotic and polarize_match:
+            click.echo(
+                "Error: --asymptotic and --polarize-match are mutually exclusive", err=True
+            )
+            return
 
-    results = []
+        # Find all alignment files
+        alignment_files = sorted(input_dir.glob(file_pattern))
 
-    for ingroup_file in ingroup_files:
-        # Construct outgroup filename
-        # Try to match by replacing the ingroup pattern suffix
-        base_name = ingroup_file.stem
-        if "_ingroup" in base_name:
-            outgroup_name = base_name.replace("_ingroup", "_outgroup") + ".fa"
-        elif "_in" in base_name:
-            outgroup_name = base_name.replace("_in", "_out") + ".fa"
-        else:
-            # Try finding matching outgroup in same directory
-            outgroup_name = base_name + "_outgroup.fa"
+        if not alignment_files:
+            click.echo(
+                f"No files matching '{file_pattern}' found in {input_dir}", err=True
+            )
+            return
 
-        outgroup_file = ingroup_dir / outgroup_name
+        click.echo(f"Processing {len(alignment_files)} alignment files...", err=True)
 
-        if not outgroup_file.exists():
-            # Try with the outgroup pattern
-            potential_matches = list(ingroup_dir.glob(outgroup_pattern))
-            # Find one with similar prefix
-            prefix = base_name.split("_")[0]
-            matches = [f for f in potential_matches if f.stem.startswith(prefix)]
-            if matches:
-                outgroup_file = matches[0]
+        results = []
+        for alignment_file in alignment_files:
+            try:
+                all_seqs = SequenceSet.from_fasta(alignment_file, reading_frame=reading_frame)
+                ingroup_seqs = all_seqs.filter_by_name(ingroup_match)
+                outgroup_seqs = all_seqs.filter_by_name(outgroup_match)
+
+                if len(ingroup_seqs) == 0:
+                    click.echo(
+                        f"Warning: No ingroup sequences in {alignment_file.name}", err=True
+                    )
+                    continue
+                if len(outgroup_seqs) == 0:
+                    click.echo(
+                        f"Warning: No outgroup sequences in {alignment_file.name}", err=True
+                    )
+                    continue
+
+                if asymptotic:
+                    result = asymptotic_mk_test(
+                        ingroup=ingroup_seqs,
+                        outgroup=outgroup_seqs,
+                        reading_frame=reading_frame,
+                        num_bins=bins,
+                        bootstrap_replicates=bootstrap,
+                    )
+                elif polarize_match:
+                    outgroup2_seqs = all_seqs.filter_by_name(polarize_match)
+                    if len(outgroup2_seqs) == 0:
+                        click.echo(
+                            f"Warning: No outgroup2 sequences in {alignment_file.name}",
+                            err=True,
+                        )
+                        continue
+                    result = polarized_mk_test(
+                        ingroup=ingroup_seqs,
+                        outgroup1=outgroup_seqs,
+                        outgroup2=outgroup2_seqs,
+                        reading_frame=reading_frame,
+                    )
+                else:
+                    result = mk_test(
+                        ingroup=ingroup_seqs,
+                        outgroup=outgroup_seqs,
+                        reading_frame=reading_frame,
+                    )
+                results.append((alignment_file.stem, result))
+            except Exception as e:
+                click.echo(f"Error processing {alignment_file.name}: {e}", err=True)
+
+    else:
+        # Separate files mode (original behavior)
+        # Check for mutually exclusive options
+        if asymptotic and polarize_pattern:
+            click.echo(
+                "Error: --asymptotic and --polarize-pattern are mutually exclusive", err=True
+            )
+            return
+
+        # Find all ingroup files
+        ingroup_files = sorted(input_dir.glob(ingroup_pattern))
+
+        if not ingroup_files:
+            click.echo(
+                f"No files matching '{ingroup_pattern}' found in {input_dir}", err=True
+            )
+            return
+
+        results = []
+
+        for ingroup_file in ingroup_files:
+            # Construct outgroup filename
+            base_name = ingroup_file.stem
+            if "_ingroup" in base_name:
+                outgroup_name = base_name.replace("_ingroup", "_outgroup") + ".fa"
+            elif "_in" in base_name:
+                outgroup_name = base_name.replace("_in", "_out") + ".fa"
             else:
-                click.echo(f"Warning: No outgroup found for {ingroup_file.name}", err=True)
-                continue
+                outgroup_name = base_name + "_outgroup.fa"
 
-        # Find second outgroup for polarized test if specified
-        outgroup2_file: Path | None = None
-        if polarize_pattern:
-            potential_matches = list(ingroup_dir.glob(polarize_pattern))
-            prefix = base_name.split("_")[0]
-            matches = [f for f in potential_matches if f.stem.startswith(prefix)]
-            if matches:
-                outgroup2_file = matches[0]
-            else:
-                click.echo(
-                    f"Warning: No second outgroup found for {ingroup_file.name}", err=True
-                )
-                continue
+            outgroup_file = input_dir / outgroup_name
 
-        try:
-            if asymptotic:
-                result = asymptotic_mk_test(
-                    ingroup=ingroup_file,
-                    outgroup=outgroup_file,
-                    reading_frame=reading_frame,
-                    num_bins=bins,
-                    bootstrap_replicates=bootstrap,
-                )
-            elif polarize_pattern and outgroup2_file:
-                result = polarized_mk_test(
-                    ingroup=ingroup_file,
-                    outgroup1=outgroup_file,
-                    outgroup2=outgroup2_file,
-                    reading_frame=reading_frame,
-                )
-            else:
-                result = mk_test(
-                    ingroup=ingroup_file,
-                    outgroup=outgroup_file,
-                    reading_frame=reading_frame,
-                )
-            results.append((ingroup_file.stem, result))
-        except Exception as e:
-            click.echo(f"Error processing {ingroup_file.name}: {e}", err=True)
+            if not outgroup_file.exists():
+                potential_matches = list(input_dir.glob(outgroup_pattern))
+                prefix = base_name.split("_")[0]
+                matches = [f for f in potential_matches if f.stem.startswith(prefix)]
+                if matches:
+                    outgroup_file = matches[0]
+                else:
+                    click.echo(
+                        f"Warning: No outgroup found for {ingroup_file.name}", err=True
+                    )
+                    continue
+
+            outgroup2_file: Path | None = None
+            if polarize_pattern:
+                potential_matches = list(input_dir.glob(polarize_pattern))
+                prefix = base_name.split("_")[0]
+                matches = [f for f in potential_matches if f.stem.startswith(prefix)]
+                if matches:
+                    outgroup2_file = matches[0]
+                else:
+                    click.echo(
+                        f"Warning: No second outgroup found for {ingroup_file.name}",
+                        err=True,
+                    )
+                    continue
+
+            try:
+                if asymptotic:
+                    result = asymptotic_mk_test(
+                        ingroup=ingroup_file,
+                        outgroup=outgroup_file,
+                        reading_frame=reading_frame,
+                        num_bins=bins,
+                        bootstrap_replicates=bootstrap,
+                    )
+                elif polarize_pattern and outgroup2_file:
+                    result = polarized_mk_test(
+                        ingroup=ingroup_file,
+                        outgroup1=outgroup_file,
+                        outgroup2=outgroup2_file,
+                        reading_frame=reading_frame,
+                    )
+                else:
+                    result = mk_test(
+                        ingroup=ingroup_file,
+                        outgroup=outgroup_file,
+                        reading_frame=reading_frame,
+                    )
+                results.append((ingroup_file.stem, result))
+            except Exception as e:
+                click.echo(f"Error processing {ingroup_file.name}: {e}", err=True)
 
     if results:
         click.echo(format_batch_results(results, fmt))

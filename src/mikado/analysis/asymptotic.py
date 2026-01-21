@@ -143,13 +143,19 @@ def asymptotic_mk_test(
         out_codons = outgroup.codon_set_clean(codon_idx)
         if not out_codons:
             continue
-        ancestral = next(iter(out_codons))
+
+        # Find ancestral codon: must be shared between ingroup and outgroup
+        # to properly polarize the polymorphism
+        ingroup_codons = set(freqs.keys())
+        shared_codons = ingroup_codons & out_codons
+        if not shared_codons:
+            # No shared allele - can't determine ancestral state
+            continue
+        # Use the most frequent shared codon as ancestral
+        ancestral = max(shared_codons, key=lambda c: freqs.get(c, 0))
 
         # Calculate derived allele frequency
-        if ancestral in freqs:
-            derived_freq = 1.0 - freqs[ancestral]
-        else:
-            derived_freq = 1.0
+        derived_freq = 1.0 - freqs[ancestral]
 
         if derived_freq <= 0 or derived_freq >= 1:
             continue
@@ -227,7 +233,8 @@ def asymptotic_mk_test(
         )
 
         a, b, c = popt
-        alpha_asymp = float(a)  # At x=1, exp term vanishes
+        # Evaluate the model at x=1 (not just 'a', since exp(-c) is not zero)
+        alpha_asymp = float(a - b * np.exp(-c))
 
     except (RuntimeError, ValueError):
         # Curve fitting failed, use last value
@@ -272,7 +279,9 @@ def asymptotic_mk_test(
                     bounds=bounds,
                     maxfev=5000,
                 )
-                bootstrap_alphas.append(popt_boot[0])
+                # Evaluate at x=1
+                a_boot, b_boot, c_boot = popt_boot
+                bootstrap_alphas.append(a_boot - b_boot * np.exp(-c_boot))
             except (RuntimeError, ValueError):
                 bootstrap_alphas.append(boot_alpha_values[-1] if boot_alpha_values else alpha_asymp)
 

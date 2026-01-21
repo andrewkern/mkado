@@ -158,3 +158,36 @@ ATGGTGATG
         assert result.ds >= 0
         assert result.pn >= 0
         assert result.ps >= 0
+
+    def test_mk_test_combined_file_mode(self, tmp_path: Path) -> None:
+        """Test MK test with combined file filtered by name patterns."""
+        # Create combined alignment with sequences from two "species"
+        combined_fa = tmp_path / "combined.fa"
+        combined_fa.write_text(""">gene1_speciesA_1
+ATGATGATG
+>gene1_speciesA_2
+ATGCTGATG
+>gene1_speciesA_3
+ATGATGATG
+>gene1_speciesB_1
+ATGGTGATG
+>gene1_speciesB_2
+ATGGTGATG
+""")
+
+        # Load and filter by species
+        all_seqs = SequenceSet.from_fasta(combined_fa)
+        ingroup = all_seqs.filter_by_name("speciesA")
+        outgroup = all_seqs.filter_by_name("speciesB")
+
+        assert len(ingroup) == 3
+        assert len(outgroup) == 2
+
+        result = mk_test(ingroup, outgroup)
+
+        # Should complete without errors
+        assert result.dn >= 0
+        assert result.ds >= 0
+        assert result.pn >= 0
+        assert result.ps >= 0
+        assert result.p_value is not None

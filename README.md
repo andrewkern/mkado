@@ -43,6 +43,28 @@ mikado asymptotic ingroup.fa outgroup.fa
 mikado info sequences.fa
 ```
 
+## Combined File Mode
+
+Mikado supports alignments where multiple species are in a single FASTA file, differentiated by sequence name patterns. Use `--ingroup-match` and `--outgroup-match` to filter sequences by substring matching on the header.
+
+```bash
+# Run MK test on a combined alignment file
+# Sequences with "_gamb_" in the name are ingroup
+# Sequences with "_mel_" in the name are outgroup
+mikado test combined.fa combined.fa --ingroup-match "_gamb_" --outgroup-match "_mel_"
+
+# Polarized test with three species in one file
+mikado test combined.fa combined.fa \
+  --ingroup-match "_gamb_" \
+  --outgroup-match "_mel_" \
+  --polarize-match "_amin_"
+
+# Asymptotic test with combined file
+mikado asymptotic combined.fa combined.fa \
+  --ingroup-match "_gamb_" \
+  --outgroup-match "_mel_"
+```
+
 ## Example Output
 
 ```
@@ -66,9 +88,12 @@ Run the standard or polarized McDonald-Kreitman test.
 mikado test INGROUP OUTGROUP [OPTIONS]
 
 Options:
-  -p, --polarize PATH    Second outgroup for polarized MK test
-  -f, --format TEXT      Output format: pretty, tsv, json
-  -r, --reading-frame    Reading frame (1, 2, or 3)
+  -p, --polarize PATH       Second outgroup for polarized MK test
+  -f, --format TEXT         Output format: pretty, tsv, json
+  -r, --reading-frame       Reading frame (1, 2, or 3)
+  --ingroup-match TEXT      Filter ingroup by name pattern (combined file mode)
+  --outgroup-match TEXT     Filter outgroup by name pattern (combined file mode)
+  --polarize-match TEXT     Filter polarizing outgroup by name pattern
 ```
 
 ### `mikado asymptotic`
@@ -79,15 +104,19 @@ Run the asymptotic MK test (Messer & Petrov 2013).
 mikado asymptotic INGROUP OUTGROUP [OPTIONS]
 
 Options:
-  -f, --format TEXT      Output format: pretty, tsv, json
-  -r, --reading-frame    Reading frame (1, 2, or 3)
-  -b, --bins INTEGER     Number of frequency bins (default: 10)
-  --bootstrap INTEGER    Bootstrap replicates for CI (default: 100)
+  -f, --format TEXT         Output format: pretty, tsv, json
+  -r, --reading-frame       Reading frame (1, 2, or 3)
+  -b, --bins INTEGER        Number of frequency bins (default: 10)
+  --bootstrap INTEGER       Bootstrap replicates for CI (default: 100)
+  --ingroup-match TEXT      Filter ingroup by name pattern (combined file mode)
+  --outgroup-match TEXT     Filter outgroup by name pattern (combined file mode)
 ```
 
 ### `mikado batch`
 
 Run MK test on multiple gene files. Supports standard, asymptotic, and polarized tests.
+
+**Separate file mode** (default): Uses glob patterns to match ingroup/outgroup files.
 
 ```bash
 mikado batch DIRECTORY [OPTIONS]
@@ -103,17 +132,38 @@ Options:
   -r, --reading-frame       Reading frame (1, 2, or 3)
 ```
 
+**Combined file mode**: Uses `--file-pattern` with `--ingroup-match` and `--outgroup-match` to process combined alignment files.
+
+```bash
+mikado batch DIRECTORY [OPTIONS]
+
+Options (combined mode):
+  --file-pattern TEXT       Glob pattern for combined alignment files
+  --ingroup-match TEXT      Substring to match ingroup sequences
+  --outgroup-match TEXT     Substring to match outgroup sequences
+  --polarize-match TEXT     Substring to match polarizing outgroup
+  -a, --asymptotic          Use asymptotic MK test
+```
+
 Examples:
 
 ```bash
-# Standard batch MK test
+# Standard batch MK test (separate files)
 mikado batch genes/ --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"
 
-# Asymptotic batch MK test
+# Asymptotic batch MK test (separate files)
 mikado batch genes/ -a --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"
 
-# Polarized batch MK test
+# Polarized batch MK test (separate files)
 mikado batch genes/ -p "*_outgroup2.fa" --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"
+
+# Combined file batch mode
+mikado batch alignments/ --file-pattern "*_aligned.fa" \
+  --ingroup-match "_gamb_" --outgroup-match "_mel_"
+
+# Combined file with asymptotic test
+mikado batch alignments/ -a --file-pattern "*_aligned.fa" \
+  --ingroup-match "_gamb_" --outgroup-match "_mel_"
 ```
 
 ### `mikado info`
@@ -145,6 +195,12 @@ print(f"95% CI: {result.ci_low} - {result.ci_high}")
 # Work with sequences directly
 seqs = SequenceSet.from_fasta("sequences.fa")
 print(f"Polymorphic codons: {len(seqs.polymorphic_codons())}")
+
+# Combined file mode - filter by sequence name
+all_seqs = SequenceSet.from_fasta("combined.fa")
+ingroup = all_seqs.filter_by_name("_gamb_")
+outgroup = all_seqs.filter_by_name("_mel_")
+result = mk_test(ingroup, outgroup)
 ```
 
 ## Interpretation
