@@ -1,0 +1,36 @@
+[project]
+name = "mikado"
+version = "0.1.0"
+description = "Modern Python implementation of the McDonald-Kreitman test toolkit"
+readme = "README.md"
+authors = [
+    { name = "Andrew Kern", email = "adkern@uoregon.edu" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.3.1",
+    "numpy>=2.4.1",
+    "scipy>=1.17.0",
+]
+
+[project.scripts]
+mikado = "mikado.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.13",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
