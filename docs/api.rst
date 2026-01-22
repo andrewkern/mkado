@@ -1,0 +1,156 @@
+Python API Reference
+====================
+
+MKado provides a Python API for programmatic access to MK test functionality.
+
+Quick Start
+-----------
+
+.. code-block:: python
+
+   from mkado import mk_test, asymptotic_mk_test, SequenceSet
+
+   # Run standard MK test
+   result = mk_test("ingroup.fa", "outgroup.fa")
+   print(f"Alpha: {result.alpha}")
+   print(f"P-value: {result.p_value}")
+
+   # Run asymptotic MK test
+   result = asymptotic_mk_test("ingroup.fa", "outgroup.fa")
+   print(f"Asymptotic Alpha: {result.alpha_asymptotic}")
+
+Core Classes
+------------
+
+SequenceSet
+^^^^^^^^^^^
+
+.. automodule:: mkado.core.sequences
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+GeneticCode
+^^^^^^^^^^^
+
+.. automodule:: mkado.core.codons
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+AlignedPair
+^^^^^^^^^^^
+
+.. automodule:: mkado.core.alignment
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Analysis Functions
+------------------
+
+Standard MK Test
+^^^^^^^^^^^^^^^^
+
+.. automodule:: mkado.analysis.mk_test
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Asymptotic MK Test
+^^^^^^^^^^^^^^^^^^
+
+.. automodule:: mkado.analysis.asymptotic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Polarized MK Test
+^^^^^^^^^^^^^^^^^
+
+.. automodule:: mkado.analysis.polarized
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Usage Examples
+--------------
+
+Working with SequenceSet
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   from mkado import SequenceSet
+
+   # Load sequences from FASTA
+   seqs = SequenceSet.from_fasta("alignment.fa")
+
+   # Filter by name pattern
+   ingroup = seqs.filter_by_name("dmel")
+   outgroup = seqs.filter_by_name("dsim")
+
+   # Get sequence information
+   print(f"Number of sequences: {len(seqs)}")
+   print(f"Alignment length: {seqs.alignment_length}")
+
+Running MK Tests
+^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   from mkado import mk_test, SequenceSet
+
+   # From file paths
+   result = mk_test("ingroup.fa", "outgroup.fa")
+
+   # From SequenceSet objects
+   all_seqs = SequenceSet.from_fasta("combined.fa")
+   ingroup = all_seqs.filter_by_name("species1")
+   outgroup = all_seqs.filter_by_name("species2")
+   result = mk_test(ingroup, outgroup)
+
+   # Access results
+   print(f"Dn={result.Dn}, Ds={result.Ds}")
+   print(f"Pn={result.Pn}, Ps={result.Ps}")
+   print(f"P-value: {result.p_value}")
+   print(f"NI: {result.NI}")
+   print(f"Alpha: {result.alpha}")
+
+Asymptotic Analysis
+^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   from mkado import asymptotic_mk_test
+
+   result = asymptotic_mk_test("ingroup.fa", "outgroup.fa", n_bins=20)
+
+   print(f"Asymptotic Alpha: {result.alpha_asymptotic}")
+   print(f"95% CI: [{result.ci_low}, {result.ci_high}]")
+
+   # Access per-bin data
+   for freq, alpha in zip(result.frequencies, result.alphas):
+       print(f"Frequency {freq:.2f}: Alpha = {alpha:.3f}")
+
+Batch Processing
+^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   from pathlib import Path
+   from mkado import mk_test, SequenceSet
+
+   # Process multiple files
+   results = {}
+   for fasta_file in Path("alignments/").glob("*.fa"):
+       seqs = SequenceSet.from_fasta(fasta_file)
+       ingroup = seqs.filter_by_name("species1")
+       outgroup = seqs.filter_by_name("species2")
+
+       if len(ingroup) > 0 and len(outgroup) > 0:
+           results[fasta_file.stem] = mk_test(ingroup, outgroup)
+
+   # Summarize results
+   for gene, result in results.items():
+       print(f"{gene}: alpha={result.alpha:.3f}, p={result.p_value:.3f}")

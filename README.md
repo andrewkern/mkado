@@ -1,6 +1,10 @@
-# MKado 御門 
+# MKado 御門
+
+[![Documentation Status](https://readthedocs.org/projects/mkado/badge/?version=latest)](https://mkado.readthedocs.io/en/latest/?badge=latest)
 
 A modern Python implementation of the McDonald-Kreitman test toolkit for detecting selection in molecular evolution.
+
+**[Documentation](https://mkado.readthedocs.io/)** | **[PyPI](https://pypi.org/project/mkado/)**
 
 ## Features
 
@@ -217,6 +221,20 @@ uv run ruff check src/
 # Run formatter
 uv run ruff format src/
 ```
+
+## Examples
+
+Example data and tutorials are available in the `examples/` directory:
+
+```bash
+# Run batch MK test on example data
+mkado batch examples/anopheles_batch/ -i gamb -o afun
+
+# Run asymptotic MK test
+mkado batch examples/anopheles_batch/ -i gamb -o afun -a
+```
+
+See the [documentation](https://mkado.readthedocs.io/) for detailed tutorials and API reference.
 
 ## References
 
