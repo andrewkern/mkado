@@ -153,7 +153,7 @@ def version_callback(value: bool) -> None:
 
 app = typer.Typer(
     name="mkado",
-    help="mkado: McDonald-Kreitman test toolkit.\n\n"
+    help="MKado 御門: McDonald-Kreitman test toolkit.\n\n"
     "A modern Python implementation for detecting selection using "
     "the McDonald-Kreitman test and related methods.",
     no_args_is_help=True,
