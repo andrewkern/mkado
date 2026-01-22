@@ -121,7 +121,7 @@ For downstream analysis:
 
    mkado batch alignments/ -i species1 -o species2 -f tsv > results.tsv
 
-Columns: gene, Dn, Ds, Pn, Ps, p_value, NI, alpha
+Columns: ``gene``, ``Dn``, ``Ds``, ``Pn``, ``Ps``, ``p_value``, ``p_value_adjusted``, ``NI``, ``alpha``
 
 JSON
 ^^^^
@@ -131,6 +131,27 @@ For programmatic processing:
 .. code-block:: bash
 
    mkado batch alignments/ -i species1 -o species2 -f json > results.json
+
+Multiple Testing Correction
+---------------------------
+
+When running batch analyses, MKado automatically applies **Benjamini-Hochberg (BH) correction** for multiple testing. This controls the false discovery rate (FDR) when testing many genes simultaneously.
+
+The adjusted p-values are reported alongside the raw Fisher's exact test p-values:
+
+- **p_value**: Raw p-value from Fisher's exact test for each gene
+- **p_value_adjusted**: BH-adjusted p-value accounting for multiple comparisons
+
+Example output (TSV format):
+
+.. code-block:: text
+
+   gene        Dn   Ds   Pn  Ps  p_value   p_value_adjusted  NI        alpha
+   AGAP000010  79   176  3   6   1         1                 1.113924  -0.113924
+   AGAP000021  16   45   0   1   1         1                 0.000000  1.000000
+   AGAP000041  60   161  2   10  0.523748  1                 0.536667  0.463333
+
+Use ``p_value_adjusted`` when interpreting significance across multiple genes to control for false discoveries.
 
 File Filtering
 --------------

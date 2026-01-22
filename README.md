@@ -11,7 +11,7 @@ A modern Python implementation of the McDonald-Kreitman test toolkit for detecti
 - **Standard MK test**: Classic 2x2 contingency table with Fisher's exact test
 - **Polarized MK test**: Uses a third outgroup to assign mutations to lineages
 - **Asymptotic MK test**: Frequency-bin α estimates with exponential extrapolation (Messer & Petrov 2013)
-- **Batch processing**: Process multiple genes with parallel execution
+- **Batch processing**: Process multiple genes with parallel execution and Benjamini-Hochberg correction for multiple testing
 - **Multiple output formats**: Pretty-print, TSV, and JSON
 
 ## Installation
