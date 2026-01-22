@@ -153,6 +153,48 @@ Example output (TSV format):
 
 Use ``p_value_adjusted`` when interpreting significance across multiple genes to control for false discoveries.
 
+Volcano Plots
+-------------
+
+MKado can generate volcano plots to visualize batch results. Volcano plots show the relationship between effect size (Neutrality Index) and statistical significance across all genes.
+
+.. code-block:: bash
+
+   # Generate a volcano plot
+   mkado batch alignments/ -i species1 -o species2 --volcano results.png
+
+   # Save as PDF for publication
+   mkado batch alignments/ -i species1 -o species2 --volcano figure.pdf
+
+   # Save as SVG for editing
+   mkado batch alignments/ -i species1 -o species2 --volcano figure.svg
+
+Plot Features
+^^^^^^^^^^^^^
+
+The volcano plot displays:
+
+- **X-axis**: -log\ :sub:`10`\ (NI) — Neutrality Index transformed to show direction of selection
+- **Y-axis**: -log\ :sub:`10`\ (p-value) — Statistical significance
+- **Bonferroni threshold line**: Horizontal dashed line indicating the significance threshold after multiple testing correction
+- **NI = 1 reference line**: Vertical dotted line at neutral expectation
+
+Interpreting the Plot
+^^^^^^^^^^^^^^^^^^^^^
+
+- **Points to the left** (negative X values): NI > 1, excess polymorphism, suggesting negative/purifying selection
+- **Points to the right** (positive X values): NI < 1, excess divergence, suggesting positive selection
+- **Points above the threshold line**: Statistically significant after Bonferroni correction
+- **Red points**: Genes significant after multiple testing correction
+- **Blue points**: Non-significant genes
+
+Example:
+
+.. code-block:: bash
+
+   # Generate volcano plot with example data
+   mkado batch examples/anopheles_batch/ -i gamb -o afun --volcano volcano.png
+
 File Filtering
 --------------
 
@@ -208,3 +250,6 @@ Here's a complete workflow using the example data:
 
    # 5. Run polarized analysis using amin as second outgroup
    mkado batch examples/anopheles_batch/ -i gamb -o afun --polarize-match amin
+
+   # 6. Generate a volcano plot for visualization
+   mkado batch examples/anopheles_batch/ -i gamb -o afun --volcano results.png

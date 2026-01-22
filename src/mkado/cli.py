@@ -544,6 +544,13 @@ def batch(
         int,
         typer.Option("--workers", "-w", min=0, help="Parallel workers (0=auto, 1=sequential)"),
     ] = 0,
+    volcano: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--volcano",
+            help="Generate volcano plot and save to specified path (PNG, PDF, or SVG)",
+        ),
+    ] = None,
 ) -> None:
     """Run MK test on multiple alignment files.
 
@@ -800,6 +807,16 @@ def batch(
     if results:
         adjusted_pvalues = compute_adjusted_pvalues(results)
         typer.echo(format_batch_results(results, fmt, adjusted_pvalues))
+
+        # Generate volcano plot if requested
+        if volcano:
+            from mkado.io.plotting import create_volcano_plot
+
+            try:
+                create_volcano_plot(results, volcano)
+                typer.echo(f"Volcano plot saved to {volcano}", err=True)
+            except ValueError as e:
+                typer.echo(f"Could not generate volcano plot: {e}", err=True)
     else:
         typer.echo("No results to display", err=True)
 

@@ -12,6 +12,7 @@ A modern Python implementation of the McDonald-Kreitman test toolkit for detecti
 - **Polarized MK test**: Uses a third outgroup to assign mutations to lineages
 - **Asymptotic MK test**: Frequency-bin α estimates with exponential extrapolation (Messer & Petrov 2013)
 - **Batch processing**: Process multiple genes with parallel execution and Benjamini-Hochberg correction for multiple testing
+- **Volcano plots**: Visualize batch results with publication-ready volcano plots
 - **Multiple output formats**: Pretty-print, TSV, and JSON
 
 ## Installation
@@ -134,6 +135,7 @@ mkado batch DIRECTORY [OPTIONS]
 | `--workers` | `-w` | Parallel workers (0=auto, 1=sequential) |
 | `--bins` | `-b` | Frequency bins for asymptotic test |
 | `--format` | `-f` | Output format: pretty, tsv, json |
+| `--volcano` | | Generate volcano plot (PNG, PDF, or SVG) |
 
 **Examples:**
 
@@ -143,6 +145,9 @@ mkado batch alignments/ -i "dmel" -o "dsim"
 mkado batch alignments/ -i "dmel" -o "dsim" -a
 mkado batch alignments/ -i "dmel" -o "dsim" -a --per-gene
 mkado batch alignments/ -i "dmel" -o "dsim" -w 8
+
+# Generate a volcano plot
+mkado batch alignments/ -i "dmel" -o "dsim" --volcano results.png
 
 # Separate files mode
 mkado batch genes/ --ingroup-pattern "*_in.fa" --outgroup-pattern "*_out.fa"

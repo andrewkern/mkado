@@ -14,6 +14,7 @@ Features
 - **Polarized MK test**: Uses a third outgroup to assign mutations to lineages
 - **Asymptotic MK test**: Frequency-bin alpha estimates with exponential extrapolation (Messer & Petrov 2013)
 - **Batch processing**: Process multiple genes with parallel execution
+- **Volcano plots**: Visualize batch results with publication-ready volcano plots
 - **Multiple output formats**: Pretty-print, TSV, and JSON
 
 Quick Example

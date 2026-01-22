@@ -23,6 +23,8 @@ dependencies = [
     "numpy>=2.4.1",
     "rich>=14.2.0",
     "scipy>=1.17.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.12.0",
 ]
 
 [project.scripts]
