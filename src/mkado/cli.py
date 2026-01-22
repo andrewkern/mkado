@@ -28,9 +28,39 @@ from mkado.analysis.mk_test import mk_test
 from mkado.analysis.polarized import polarized_mk_test
 from mkado.batch_workers import BatchTask, WorkerResult, process_gene
 from mkado.io.output import OutputFormat, format_batch_results, format_result
+from scipy.stats import false_discovery_control
+
+from mkado.analysis.mk_test import MKResult
+from mkado.analysis.polarized import PolarizedMKResult
 
 # Console that writes to stderr (so progress doesn't mix with data output)
 stderr_console = Console(stderr=True)
+
+
+def compute_adjusted_pvalues(
+    results: list[tuple[str, MKResult | PolarizedMKResult]],
+) -> list[float]:
+    """Compute Benjamini-Hochberg adjusted p-values for batch results.
+
+    Args:
+        results: List of (name, result) tuples from MK tests
+
+    Returns:
+        List of adjusted p-values in the same order as input results
+    """
+    p_values = []
+    for _, result in results:
+        if isinstance(result, MKResult):
+            p_values.append(result.p_value)
+        elif isinstance(result, PolarizedMKResult):
+            p_values.append(result.p_value_ingroup)
+        else:
+            p_values.append(1.0)  # Default for unknown types
+
+    if not p_values:
+        return []
+
+    return list(false_discovery_control(p_values, method="bh"))
 
 
 class RainbowBarColumn(BarColumn):
@@ -768,7 +798,8 @@ def batch(
         results = [(r.gene_id, r.result) for r in worker_results]
 
     if results:
-        typer.echo(format_batch_results(results, fmt))
+        adjusted_pvalues = compute_adjusted_pvalues(results)
+        typer.echo(format_batch_results(results, fmt, adjusted_pvalues))
     else:
         typer.echo("No results to display", err=True)
 

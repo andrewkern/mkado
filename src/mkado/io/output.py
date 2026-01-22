@@ -100,26 +100,36 @@ def _format_tsv(result: MKResult | PolarizedMKResult | AsymptoticMKResult) -> st
 def format_batch_results(
     results: list[tuple[str, MKResult | PolarizedMKResult | AsymptoticMKResult]],
     format: OutputFormat = OutputFormat.PRETTY,
+    adjusted_pvalues: list[float] | None = None,
 ) -> str:
     """Format multiple MK test results for batch output.
 
     Args:
         results: List of (name, result) tuples
         format: Output format
+        adjusted_pvalues: Optional list of Benjamini-Hochberg adjusted p-values
+            (must be same length as results if provided)
 
     Returns:
         Formatted string representation
     """
     if format == OutputFormat.PRETTY:
         lines = []
-        for name, result in results:
+        for i, (name, result) in enumerate(results):
             lines.append(f"=== {name} ===")
             lines.append(str(result))
+            if adjusted_pvalues is not None:
+                lines.append(f"  p-value (BH adj):     {adjusted_pvalues[i]:.6g}")
             lines.append("")
         return "\n".join(lines)
 
     elif format == OutputFormat.JSON:
-        data = {name: result.to_dict() for name, result in results}
+        data = {}
+        for i, (name, result) in enumerate(results):
+            result_dict = result.to_dict()
+            if adjusted_pvalues is not None:
+                result_dict["p_value_adjusted"] = adjusted_pvalues[i]
+            data[name] = result_dict
         return json.dumps(data, indent=2)
 
     elif format == OutputFormat.TSV:
@@ -133,16 +143,25 @@ def format_batch_results(
         # Check type of first result
         _, first_result = results[0]
         if isinstance(first_result, MKResult):
-            header = "gene\tDn\tDs\tPn\tPs\tp_value\tNI\talpha"
+            if adjusted_pvalues is not None:
+                header = "gene\tDn\tDs\tPn\tPs\tp_value\tp_value_adjusted\tNI\talpha"
+            else:
+                header = "gene\tDn\tDs\tPn\tPs\tp_value\tNI\talpha"
             lines = [header]
-            for name, result in results:
+            for i, (name, result) in enumerate(results):
                 if isinstance(result, MKResult):
                     ni_str = f"{result.ni:.6f}" if result.ni is not None else "NA"
                     alpha_str = f"{result.alpha:.6f}" if result.alpha is not None else "NA"
-                    lines.append(
-                        f"{name}\t{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t"
-                        f"{result.p_value:.6g}\t{ni_str}\t{alpha_str}"
-                    )
+                    if adjusted_pvalues is not None:
+                        lines.append(
+                            f"{name}\t{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t"
+                            f"{result.p_value:.6g}\t{adjusted_pvalues[i]:.6g}\t{ni_str}\t{alpha_str}"
+                        )
+                    else:
+                        lines.append(
+                            f"{name}\t{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t"
+                            f"{result.p_value:.6g}\t{ni_str}\t{alpha_str}"
+                        )
             return "\n".join(lines)
 
         elif isinstance(first_result, AsymptoticMKResult):
@@ -158,18 +177,29 @@ def format_batch_results(
             return "\n".join(lines)
 
         elif isinstance(first_result, PolarizedMKResult):
-            header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tNI\talpha"
+            if adjusted_pvalues is not None:
+                header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tp_value_adjusted\tNI\talpha"
+            else:
+                header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tNI\talpha"
             lines = [header]
-            for name, result in results:
+            for i, (name, result) in enumerate(results):
                 if isinstance(result, PolarizedMKResult):
                     ni_str = f"{result.ni_ingroup:.6f}" if result.ni_ingroup is not None else "NA"
                     alpha_str = f"{result.alpha_ingroup:.6f}" if result.alpha_ingroup is not None else "NA"
-                    lines.append(
-                        f"{name}\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
-                        f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
-                        f"{result.dn_outgroup}\t{result.ds_outgroup}\t"
-                        f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}"
-                    )
+                    if adjusted_pvalues is not None:
+                        lines.append(
+                            f"{name}\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
+                            f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
+                            f"{result.dn_outgroup}\t{result.ds_outgroup}\t"
+                            f"{result.p_value_ingroup:.6g}\t{adjusted_pvalues[i]:.6g}\t{ni_str}\t{alpha_str}"
+                        )
+                    else:
+                        lines.append(
+                            f"{name}\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
+                            f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
+                            f"{result.dn_outgroup}\t{result.ds_outgroup}\t"
+                            f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}"
+                        )
             return "\n".join(lines)
 
         else:
