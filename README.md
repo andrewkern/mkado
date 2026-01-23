@@ -11,6 +11,7 @@ A modern Python implementation of the McDonald-Kreitman test toolkit for detecti
 - **Standard MK test**: Classic 2x2 contingency table with Fisher's exact test
 - **Polarized MK test**: Uses a third outgroup to assign mutations to lineages
 - **Asymptotic MK test**: Frequency-bin α estimates with exponential extrapolation (Messer & Petrov 2013)
+- **Tarone-Greenland α_TG**: Weighted multi-gene estimator that corrects for sample size heterogeneity (Stoletzki & Eyre-Walker 2011)
 - **Batch processing**: Process multiple genes with parallel execution and Benjamini-Hochberg correction for multiple testing
 - **Volcano plots**: Visualize batch results with publication-ready volcano plots
 - **Multiple output formats**: Pretty-print, TSV, and JSON
@@ -132,6 +133,7 @@ mkado batch DIRECTORY [OPTIONS]
 | `--ingroup-match` | `-i` | Ingroup pattern (enables combined file mode) |
 | `--outgroup-match` | `-o` | Outgroup pattern (required with -i) |
 | `--asymptotic` | `-a` | Use asymptotic MK test |
+| `--alpha-tg` | | Compute weighted α_TG (Stoletzki & Eyre-Walker 2011) |
 | `--aggregate/--per-gene` | | Aggregate results or per-gene (asymptotic) |
 | `--pattern` | | File glob pattern (default: auto-detect *.fa, *.fasta, *.fna) |
 | `--workers` | `-w` | Parallel workers (0=auto, 1=sequential) |
@@ -147,6 +149,7 @@ mkado batch DIRECTORY [OPTIONS]
 mkado batch alignments/ -i "dmel" -o "dsim"
 mkado batch alignments/ -i "dmel" -o "dsim" -a
 mkado batch alignments/ -i "dmel" -o "dsim" -a --per-gene
+mkado batch alignments/ -i "dmel" -o "dsim" --alpha-tg
 mkado batch alignments/ -i "dmel" -o "dsim" -w 8
 
 # Generate a volcano plot
@@ -251,6 +254,7 @@ See the [documentation](https://mkado.readthedocs.io/) for detailed tutorials an
 
 - McDonald, J. H., & Kreitman, M. (1991). Adaptive protein evolution at the Adh locus in Drosophila. Nature, 351(6328), 652-654.
 - Messer, P. W., & Petrov, D. A. (2013). Frequent adaptation and the McDonald–Kreitman test. PNAS, 110(21), 8615-8620.
+- Stoletzki, N., & Eyre-Walker, A. (2011). Estimation of the Neutrality Index. Molecular Biology and Evolution, 28(1), 63-70.
 
 ## License
 

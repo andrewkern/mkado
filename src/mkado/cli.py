@@ -545,6 +545,13 @@ def batch(
             help="Aggregate across genes (default) or per-gene results (asymptotic)",
         ),
     ] = True,
+    alpha_tg: Annotated[
+        bool,
+        typer.Option(
+            "--alpha-tg",
+            help="Compute α_TG (Stoletzki & Eyre-Walker 2011 weighted estimator)",
+        ),
+    ] = False,
     # === Asymptotic options ===
     bins: Annotated[
         int,
@@ -688,10 +695,36 @@ def batch(
                 bootstrap=bootstrap,
                 pool_polymorphisms=pool_polymorphisms,
                 min_freq=min_freq,
-                extract_only=(use_asymptotic and aggregate),
+                extract_only=(use_asymptotic and aggregate) or alpha_tg,
             )
             for f in alignment_files
         ]
+
+        # Alpha TG mode
+        if alpha_tg:
+            from mkado.analysis.alpha_tg import alpha_tg_from_gene_data
+            from mkado.analysis.asymptotic import PolymorphismData
+
+            worker_results, warnings = run_parallel_batch(
+                tasks, num_workers, "Extracting polymorphism data"
+            )
+
+            for warning in warnings:
+                typer.echo(warning, err=True)
+
+            gene_data_list: list[PolymorphismData] = [
+                r.result for r in worker_results if r.result is not None
+            ]
+
+            if gene_data_list:
+                result = alpha_tg_from_gene_data(
+                    gene_data=gene_data_list,
+                    bootstrap_replicates=bootstrap,
+                )
+                typer.echo(format_result(result, fmt))
+            else:
+                typer.echo("No valid gene data extracted", err=True)
+            return
 
         # Aggregated asymptotic mode
         if use_asymptotic and aggregate:
@@ -810,7 +843,7 @@ def batch(
                     bootstrap=bootstrap,
                     pool_polymorphisms=pool_polymorphisms,
                     min_freq=min_freq,
-                    extract_only=(use_asymptotic and aggregate),
+                    extract_only=(use_asymptotic and aggregate) or alpha_tg,
                 )
             )
 
@@ -820,6 +853,32 @@ def batch(
         if not tasks:
             typer.echo("No valid file pairs found", err=True)
             raise typer.Exit(1)
+
+        # Alpha TG mode
+        if alpha_tg:
+            from mkado.analysis.alpha_tg import alpha_tg_from_gene_data
+            from mkado.analysis.asymptotic import PolymorphismData
+
+            worker_results, warnings = run_parallel_batch(
+                tasks, num_workers, "Extracting polymorphism data"
+            )
+
+            for warning in warnings:
+                typer.echo(warning, err=True)
+
+            gene_data_list: list[PolymorphismData] = [
+                r.result for r in worker_results if r.result is not None
+            ]
+
+            if gene_data_list:
+                result = alpha_tg_from_gene_data(
+                    gene_data=gene_data_list,
+                    bootstrap_replicates=bootstrap,
+                )
+                typer.echo(format_result(result, fmt))
+            else:
+                typer.echo("No valid gene data extracted", err=True)
+            return
 
         # Aggregated asymptotic mode
         if use_asymptotic and aggregate:

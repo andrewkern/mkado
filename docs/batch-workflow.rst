@@ -109,6 +109,17 @@ Per-Gene Analysis
 
 This outputs asymptotic results for each gene individually.
 
+Tarone-Greenland Alpha (α_TG)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For a weighted multi-gene estimate that corrects for sample size heterogeneity without frequency spectrum modeling:
+
+.. code-block:: bash
+
+   mkado batch alignments/ -i species1 -o species2 --alpha-tg
+
+See :doc:`alpha-tg` for details on when to use α_TG vs. asymptotic α.
+
 Parallel Processing
 -------------------
 

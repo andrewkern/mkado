@@ -1,0 +1,195 @@
+"""Tarone-Greenland alpha (α_TG) implementation.
+
+Implements the weighted estimator from:
+    Stoletzki N, Eyre-Walker A (2011) Estimation of the Neutrality Index.
+    Mol Biol Evol 28(1):63-70. doi:10.1093/molbev/msq249
+
+The NI_TG formula (Equation 3):
+
+         Σᵢ (Dₛᵢ × Pₙᵢ) / (Pₛᵢ + Dₛᵢ)
+NI_TG = ────────────────────────────────
+         Σᵢ (Dₙᵢ × Pₛᵢ) / (Pₛᵢ + Dₛᵢ)
+
+And α_TG = 1 - NI_TG (proportion of adaptive nonsynonymous substitutions).
+
+The weighting by 1/(Pₛᵢ + Dₛᵢ) provides an unbiased estimate even with
+heterogeneity across genes.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from mkado.analysis.asymptotic import PolymorphismData
+
+
+@dataclass
+class AlphaTGResult:
+    """Results from Tarone-Greenland alpha estimation."""
+
+    alpha_tg: float
+    """Proportion of adaptive substitutions (1 - NI_TG)."""
+
+    ni_tg: float
+    """The underlying weighted neutrality index."""
+
+    ci_low: float
+    """Lower bound of 95% bootstrap confidence interval for alpha_tg."""
+
+    ci_high: float
+    """Upper bound of 95% bootstrap confidence interval for alpha_tg."""
+
+    num_genes: int
+    """Number of genes used in the calculation."""
+
+    dn_total: int
+    """Total nonsynonymous divergence across all genes."""
+
+    ds_total: int
+    """Total synonymous divergence across all genes."""
+
+    pn_total: int
+    """Total nonsynonymous polymorphism across all genes."""
+
+    ps_total: int
+    """Total synonymous polymorphism across all genes."""
+
+    def __str__(self) -> str:
+        """Return a human-readable string representation."""
+        lines = [
+            "Tarone-Greenland Alpha (Stoletzki & Eyre-Walker 2011):",
+            f"  α_TG:  {self.alpha_tg:.4f} (95% CI: {self.ci_low:.4f} - {self.ci_high:.4f})",
+            f"  NI_TG: {self.ni_tg:.4f}",
+            f"  Divergence:    Dn={self.dn_total}, Ds={self.ds_total}",
+            f"  Polymorphism:  Pn={self.pn_total}, Ps={self.ps_total}",
+            f"  Genes: {self.num_genes}",
+        ]
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        """Convert results to a dictionary."""
+        return {
+            "alpha_tg": self.alpha_tg,
+            "ni_tg": self.ni_tg,
+            "ci_low": self.ci_low,
+            "ci_high": self.ci_high,
+            "num_genes": self.num_genes,
+            "dn_total": self.dn_total,
+            "ds_total": self.ds_total,
+            "pn_total": self.pn_total,
+            "ps_total": self.ps_total,
+        }
+
+
+def compute_ni_tg(gene_data: list[PolymorphismData]) -> float | None:
+    """Compute NI_TG (Equation 3 from Stoletzki & Eyre-Walker 2011).
+
+    NI_TG = Σᵢ (Dₛᵢ × Pₙᵢ) / (Pₛᵢ + Dₛᵢ)
+            ─────────────────────────────
+            Σᵢ (Dₙᵢ × Pₛᵢ) / (Pₛᵢ + Dₛᵢ)
+
+    Args:
+        gene_data: List of PolymorphismData from individual genes.
+
+    Returns:
+        The weighted neutrality index, or None if denominator is zero.
+    """
+    numerator = 0.0
+    denominator = 0.0
+
+    for gene in gene_data:
+        # Count Pn and Ps for this gene
+        pn = sum(1 for _, ptype in gene.polymorphisms if ptype == "N")
+        ps = sum(1 for _, ptype in gene.polymorphisms if ptype == "S")
+
+        # Weight factor: 1 / (Ps + Ds)
+        weight = ps + gene.ds
+        if weight > 0:
+            numerator += (gene.ds * pn) / weight
+            denominator += (gene.dn * ps) / weight
+
+    if denominator <= 0:
+        return None
+
+    return numerator / denominator
+
+
+def alpha_tg_from_gene_data(
+    gene_data: list[PolymorphismData],
+    bootstrap_replicates: int = 1000,
+    seed: int | None = None,
+) -> AlphaTGResult:
+    """Compute α_TG with bootstrap confidence intervals.
+
+    Args:
+        gene_data: List of PolymorphismData from individual genes.
+        bootstrap_replicates: Number of bootstrap replicates for CI estimation.
+        seed: Random seed for reproducibility (optional).
+
+    Returns:
+        AlphaTGResult containing α_TG, NI_TG, and 95% bootstrap CI.
+    """
+    # Calculate totals
+    dn_total = sum(g.dn for g in gene_data)
+    ds_total = sum(g.ds for g in gene_data)
+    pn_total = sum(
+        sum(1 for _, ptype in g.polymorphisms if ptype == "N") for g in gene_data
+    )
+    ps_total = sum(
+        sum(1 for _, ptype in g.polymorphisms if ptype == "S") for g in gene_data
+    )
+    num_genes = len(gene_data)
+
+    # Compute point estimate
+    ni_tg = compute_ni_tg(gene_data)
+
+    if ni_tg is None:
+        # Cannot compute - return zero with NA-like CI
+        return AlphaTGResult(
+            alpha_tg=0.0,
+            ni_tg=0.0,
+            ci_low=0.0,
+            ci_high=0.0,
+            num_genes=num_genes,
+            dn_total=dn_total,
+            ds_total=ds_total,
+            pn_total=pn_total,
+            ps_total=ps_total,
+        )
+
+    alpha_tg = 1.0 - ni_tg
+
+    # Bootstrap for confidence intervals
+    rng = np.random.default_rng(seed)
+    bootstrap_alphas: list[float] = []
+
+    for _ in range(bootstrap_replicates):
+        # Resample genes with replacement
+        indices = rng.integers(0, num_genes, size=num_genes)
+        boot_data = [gene_data[i] for i in indices]
+
+        boot_ni = compute_ni_tg(boot_data)
+        if boot_ni is not None:
+            bootstrap_alphas.append(1.0 - boot_ni)
+
+    # Calculate 95% CI
+    if bootstrap_alphas:
+        ci_low = float(np.percentile(bootstrap_alphas, 2.5))
+        ci_high = float(np.percentile(bootstrap_alphas, 97.5))
+    else:
+        ci_low = alpha_tg
+        ci_high = alpha_tg
+
+    return AlphaTGResult(
+        alpha_tg=alpha_tg,
+        ni_tg=ni_tg,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        num_genes=num_genes,
+        dn_total=dn_total,
+        ds_total=ds_total,
+        pn_total=pn_total,
+        ps_total=ps_total,
+    )
