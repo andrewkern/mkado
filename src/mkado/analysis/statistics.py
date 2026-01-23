@@ -39,7 +39,7 @@ def neutrality_index(dn: int, ds: int, pn: int, ps: int) -> float | None:
     NI = (Pn/Ps) / (Dn/Ds)
 
     Under neutrality, NI = 1.
-    NI > 1 suggests negative selection (excess polymorphism).
+    NI > 1 suggests segregating weakly deleterious polymorphisms (excess polymorphism).
     NI < 1 suggests positive selection (excess divergence).
 
     Args:
@@ -64,7 +64,7 @@ def alpha(dn: int, ds: int, pn: int, ps: int) -> float | None:
 
     Under neutrality, α = 0.
     α > 0 suggests positive selection.
-    α < 0 suggests negative selection.
+    α < 0 suggests segregating weakly deleterious polymorphisms.
 
     Args:
         dn: Non-synonymous divergence

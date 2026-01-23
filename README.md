@@ -211,7 +211,7 @@ result = mk_test(ingroup, outgroup)
 ### Neutrality Index (NI)
 
 - **NI = 1**: Neutral evolution
-- **NI > 1**: Excess polymorphism (negative/purifying selection)
+- **NI > 1**: Excess polymorphism (segregating weakly deleterious variants)
 - **NI < 1**: Excess divergence (positive selection)
 
 ### Alpha (α)

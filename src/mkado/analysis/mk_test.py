@@ -67,7 +67,7 @@ def mk_test(
 
     Under neutrality, these ratios should be equal. Deviations suggest selection:
     - Excess divergence relative to polymorphism suggests positive selection
-    - Excess polymorphism relative to divergence suggests negative selection
+    - Excess polymorphism relative to divergence suggests segregating weakly deleterious polymorphisms
 
     Args:
         ingroup: SequenceSet or path to FASTA file for ingroup sequences

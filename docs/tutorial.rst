@@ -61,7 +61,7 @@ Neutrality Index (NI)
 ^^^^^^^^^^^^^^^^^^^^^
 
 - **NI = 1**: Consistent with neutral evolution
-- **NI > 1**: Excess polymorphism (negative/purifying selection)
+- **NI > 1**: Excess polymorphism (segregating weakly deleterious variants)
 - **NI < 1**: Excess divergence (positive selection)
 
 Alpha

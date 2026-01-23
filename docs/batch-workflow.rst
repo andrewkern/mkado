@@ -218,7 +218,7 @@ The volcano plot displays:
 Interpreting the Plot
 ^^^^^^^^^^^^^^^^^^^^^
 
-- **Points to the left** (negative X values): NI > 1, excess polymorphism, suggesting negative/purifying selection
+- **Points to the left** (negative X values): NI > 1, excess polymorphism, suggesting segregating weakly deleterious variants
 - **Points to the right** (positive X values): NI < 1, excess divergence, suggesting positive selection
 - **Points above the threshold line**: Statistically significant after Bonferroni correction
 - **Red points**: Genes significant after multiple testing correction
