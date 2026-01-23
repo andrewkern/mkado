@@ -414,6 +414,8 @@ Next Steps
 ----------
 
 - Learn about :doc:`batch-workflow` for processing multiple genes
+- Explore :doc:`asymptotic` for the full asymptotic MK methodology
+- Understand :doc:`alpha-tg` for weighted multi-gene estimates
 - Review :doc:`file-formats` for input requirements
 - Explore the :doc:`api` for programmatic access
 

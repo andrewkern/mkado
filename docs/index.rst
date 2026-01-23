@@ -39,6 +39,7 @@ Quick Example
    installation
    tutorial
    batch-workflow
+   asymptotic
    alpha-tg
    file-formats
    api

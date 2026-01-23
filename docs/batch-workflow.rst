@@ -111,6 +111,8 @@ Per-Gene Analysis
 
 This outputs asymptotic results for each gene individually.
 
+See :doc:`asymptotic` for full details on the asymptotic methodology, model selection, and interpretation.
+
 Tarone-Greenland Alpha (α_TG)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
