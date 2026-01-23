@@ -81,8 +81,8 @@ When running aggregated asymptotic analysis, you can generate a plot showing how
 
 .. code-block:: bash
 
-   # Generate alpha(x) vs frequency plot
-   mkado batch alignments/ -i species1 -o species2 -a --plot-asymptotic alpha_fit.png
+   # Generate alpha(x) vs frequency plot with 20 frequency bins
+   mkado batch alignments/ -i species1 -o species2 -a -b 20 --plot-asymptotic alpha_fit.png
 
 The plot shows:
 
@@ -218,7 +218,7 @@ Example:
 .. code-block:: bash
 
    # Generate volcano plot with example data
-   mkado batch examples/anopheles_batch/ -i gamb -o afun --volcano volcano.png
+   mkado batch examples/anopheles_batch/ -i afun -o gamb --volcano volcano.png
 
 .. figure:: _static/volcano.png
    :width: 500px
@@ -269,19 +269,19 @@ Here's a complete workflow using the example data:
 .. code-block:: bash
 
    # 1. Check file info
-   mkado info examples/anopheles_batch/AGAP000010.fa
+   mkado info examples/anopheles_batch/AGAP000074.fa
 
    # 2. Run standard batch analysis
-   mkado batch examples/anopheles_batch/ -i gamb -o afun
+   mkado batch examples/anopheles_batch/ -i afun -o gamb
 
-   # 3. Run asymptotic analysis with aggregated results
-   mkado batch examples/anopheles_batch/ -i gamb -o afun -a
+   # 3. Run asymptotic analysis with 20 frequency bins
+   mkado batch examples/anopheles_batch/ -i afun -o gamb -a -b 20
 
    # 4. Export results for downstream analysis
-   mkado batch examples/anopheles_batch/ -i gamb -o afun -f tsv > results.tsv
+   mkado batch examples/anopheles_batch/ -i afun -o gamb -f tsv > results.tsv
 
-   # 5. Run polarized analysis using amin as second outgroup
-   mkado batch examples/anopheles_batch/ -i gamb -o afun --polarize-match amin
+   # 5. Generate a volcano plot for visualization
+   mkado batch examples/anopheles_batch/ -i afun -o gamb --volcano results.png
 
-   # 6. Generate a volcano plot for visualization
-   mkado batch examples/anopheles_batch/ -i gamb -o afun --volcano results.png
+   # 6. Generate asymptotic alpha plot
+   mkado batch examples/anopheles_batch/ -i afun -o gamb -a -b 20 --plot-asymptotic asymptotic.png

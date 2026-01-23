@@ -74,14 +74,20 @@ def create_volcano_plot(
     # Bonferroni correction threshold
     n_tests = len(results)
     bonferroni_threshold = alpha / n_tests
-    neg_log10_threshold = -np.log10(bonferroni_threshold)
+    neg_log10_bonf = -np.log10(bonferroni_threshold)
+
+    # FDR threshold (nominal significance level)
+    fdr_threshold = alpha
+    neg_log10_fdr = -np.log10(fdr_threshold)
 
     # Create figure
     fig, ax = plt.subplots(figsize=(10, 8))
 
     # Determine point colors based on significance
-    significant = p_arr < bonferroni_threshold
-    colors = np.where(significant, "#e74c3c", "#3498db")  # Red for significant, blue otherwise
+    # Red: significant after Bonferroni, Orange: significant at FDR but not Bonferroni, Blue: not significant
+    sig_bonf = p_arr < bonferroni_threshold
+    sig_fdr = (p_arr < fdr_threshold) & ~sig_bonf
+    colors = np.where(sig_bonf, "#e74c3c", np.where(sig_fdr, "#e67e22", "#3498db"))
 
     # Create scatter plot
     scatter = ax.scatter(
@@ -96,21 +102,29 @@ def create_volcano_plot(
 
     # Add Bonferroni threshold line
     ax.axhline(
-        y=neg_log10_threshold,
+        y=neg_log10_bonf,
         color="#e74c3c",
         linestyle="--",
         linewidth=1.5,
-        label=f"Bonferroni threshold (p = {bonferroni_threshold:.2e})",
+        label=f"Bonferroni (p = {bonferroni_threshold:.2e})",
     )
 
-    # Add vertical line at NI = 1 (neutral expectation)
+    # Add FDR threshold line
+    ax.axhline(
+        y=neg_log10_fdr,
+        color="#e67e22",
+        linestyle="--",
+        linewidth=1.5,
+        label=f"Nominal (p = {fdr_threshold})",
+    )
+
+    # Add vertical line at -log10(NI) = 0, i.e. NI = 1 (neutral expectation)
     ax.axvline(
-        x=0,  # -log10(1) = 0
-        color="#95a5a6",
+        x=0,
+        color="#2c3e50",
         linestyle=":",
-        linewidth=1,
-        alpha=0.7,
-        label="NI = 1 (neutral)",
+        linewidth=1.5,
+        label="Neutral (NI = 1)",
     )
 
     # Labels and title
@@ -125,8 +139,8 @@ def create_volcano_plot(
     xlim = ax.get_xlim()
     ax.text(
         xlim[0] + 0.02 * (xlim[1] - xlim[0]),
-        neg_log10_threshold + 0.3,
-        f"n = {len(ni_values)} genes, {sum(significant)} significant",
+        neg_log10_bonf + 0.3,
+        f"n = {len(ni_values)} genes, {sum(sig_bonf)} Bonferroni, {sum(sig_fdr)} nominal",
         fontsize=9,
         color="#7f8c8d",
     )
@@ -234,7 +248,7 @@ def create_asymptotic_plot(
     ax.set_title("Asymptotic MK Test: α(x) vs Frequency", fontsize=14, fontweight="bold")
 
     # Set axis limits
-    ax.set_xlim(0, 1.05)
+    ax.set_xlim(0, 1)
 
     # Add legend
     ax.legend(loc="lower right", framealpha=0.9)
