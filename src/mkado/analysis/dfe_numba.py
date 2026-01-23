@@ -653,6 +653,180 @@ def displaced_gamma_density(
 
 
 # =============================================================================
+# Vectorized DFE grid evaluation (for performance)
+# =============================================================================
+
+
+@numba.njit(cache=True, fastmath=True)
+def gamma_density_grid(s_grid: np.ndarray, shape: float, mean: float) -> np.ndarray:
+    """Evaluate gamma DFE density on entire S grid (vectorized).
+
+    Much faster than calling gamma_density() in a loop.
+
+    Args:
+        s_grid: Array of S values
+        shape: Shape parameter
+        mean: Mean parameter
+
+    Returns:
+        Array of density values
+    """
+    n = len(s_grid)
+    result = np.zeros(n)
+
+    if mean <= 0 or shape <= 0:
+        return result
+
+    scale = mean / shape
+    log_scale = math.log(scale)
+    lgamma_shape = math.lgamma(shape)
+
+    for i in range(n):
+        s = s_grid[i]
+        if s >= 0:
+            result[i] = 0.0
+        else:
+            abs_s = -s
+            log_density = ((shape - 1.0) * math.log(abs_s)
+                           - abs_s / scale
+                           - shape * log_scale
+                           - lgamma_shape)
+            result[i] = math.exp(log_density)
+
+    return result
+
+
+@numba.njit(cache=True, fastmath=True)
+def gamma_expo_density_grid(
+    s_grid: np.ndarray,
+    shape_del: float,
+    mean_del: float,
+    prop_ben: float,
+    mean_ben: float,
+) -> np.ndarray:
+    """Evaluate GammaExpo DFE density on entire S grid (vectorized)."""
+    n = len(s_grid)
+    result = np.zeros(n)
+
+    # Pre-compute constants for gamma part
+    if mean_del > 0 and shape_del > 0:
+        scale_del = mean_del / shape_del
+        log_scale_del = math.log(scale_del)
+        lgamma_shape_del = math.lgamma(shape_del)
+    else:
+        scale_del = 0.0
+        log_scale_del = 0.0
+        lgamma_shape_del = 0.0
+
+    for i in range(n):
+        s = s_grid[i]
+        if s < 0:
+            # Deleterious (gamma)
+            if mean_del > 0 and shape_del > 0:
+                abs_s = -s
+                log_density = ((shape_del - 1.0) * math.log(abs_s)
+                               - abs_s / scale_del
+                               - shape_del * log_scale_del
+                               - lgamma_shape_del)
+                result[i] = (1.0 - prop_ben) * math.exp(log_density)
+        elif s > 0:
+            # Beneficial (exponential)
+            if mean_ben > 0:
+                result[i] = prop_ben * math.exp(-s / mean_ben) / mean_ben
+
+    return result
+
+
+@numba.njit(cache=True, fastmath=True)
+def gamma_gamma_density_grid(
+    s_grid: np.ndarray,
+    shape_del: float,
+    mean_del: float,
+    prop_ben: float,
+    shape_ben: float,
+    mean_ben: float,
+) -> np.ndarray:
+    """Evaluate GammaGamma DFE density on entire S grid (vectorized)."""
+    n = len(s_grid)
+    result = np.zeros(n)
+
+    # Pre-compute constants for deleterious gamma
+    if mean_del > 0 and shape_del > 0:
+        scale_del = mean_del / shape_del
+        log_scale_del = math.log(scale_del)
+        lgamma_shape_del = math.lgamma(shape_del)
+    else:
+        scale_del = 0.0
+        log_scale_del = 0.0
+        lgamma_shape_del = 0.0
+
+    # Pre-compute constants for beneficial gamma
+    if mean_ben > 0 and shape_ben > 0:
+        scale_ben = mean_ben / shape_ben
+        log_scale_ben = math.log(scale_ben)
+        lgamma_shape_ben = math.lgamma(shape_ben)
+    else:
+        scale_ben = 0.0
+        log_scale_ben = 0.0
+        lgamma_shape_ben = 0.0
+
+    for i in range(n):
+        s = s_grid[i]
+        if s < 0:
+            # Deleterious (gamma)
+            if mean_del > 0 and shape_del > 0:
+                abs_s = -s
+                log_density = ((shape_del - 1.0) * math.log(abs_s)
+                               - abs_s / scale_del
+                               - shape_del * log_scale_del
+                               - lgamma_shape_del)
+                result[i] = (1.0 - prop_ben) * math.exp(log_density)
+        elif s > 0:
+            # Beneficial (gamma)
+            if mean_ben > 0 and shape_ben > 0:
+                log_density = ((shape_ben - 1.0) * math.log(s)
+                               - s / scale_ben
+                               - shape_ben * log_scale_ben
+                               - lgamma_shape_ben)
+                result[i] = prop_ben * math.exp(log_density)
+
+    return result
+
+
+@numba.njit(cache=True, fastmath=True)
+def displaced_gamma_density_grid(
+    s_grid: np.ndarray,
+    shape: float,
+    mean: float,
+    displacement: float,
+) -> np.ndarray:
+    """Evaluate DisplacedGamma DFE density on entire S grid (vectorized)."""
+    n = len(s_grid)
+    result = np.zeros(n)
+
+    if mean <= 0 or shape <= 0:
+        return result
+
+    scale = mean / shape
+    log_scale = math.log(scale)
+    lgamma_shape = math.lgamma(shape)
+
+    for i in range(n):
+        shifted_s = s_grid[i] - displacement
+        if shifted_s >= 0:
+            result[i] = 0.0
+        else:
+            abs_shifted = -shifted_s
+            log_density = ((shape - 1.0) * math.log(abs_shifted)
+                           - abs_shifted / scale
+                           - shape * log_scale
+                           - lgamma_shape)
+            result[i] = math.exp(log_density)
+
+    return result
+
+
+# =============================================================================
 # Expected SFS under DFE
 # =============================================================================
 
