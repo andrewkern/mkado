@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mkado.analysis.mk_test import MKResult, mk_test, mk_test_from_counts
-from mkado.analysis.statistics import alpha, fishers_exact, neutrality_index
+from mkado.analysis.statistics import alpha, dos, fishers_exact, neutrality_index
 from mkado.core.sequences import SequenceSet
 
 
@@ -65,6 +65,65 @@ class TestStatistics:
         assert a is not None
         assert a < 0
 
+    def test_dos_neutral(self) -> None:
+        """Test DoS under neutrality."""
+        # Equal ratios -> DoS = 0
+        d = dos(10, 10, 10, 10)
+        assert d is not None
+        assert abs(d) < 0.001
+
+    def test_dos_positive_selection(self) -> None:
+        """Test DoS under positive selection (excess divergence)."""
+        # High Dn ratio -> DoS > 0
+        d = dos(20, 5, 5, 20)
+        assert d is not None
+        assert d > 0
+
+    def test_dos_negative_selection(self) -> None:
+        """Test DoS under negative selection (excess polymorphism)."""
+        # High Pn ratio -> DoS < 0
+        d = dos(5, 20, 20, 5)
+        assert d is not None
+        assert d < 0
+
+    def test_dos_zero_divergence(self) -> None:
+        """Test DoS when Dn+Ds=0."""
+        # Only polymorphism -> returns value (not None)
+        d = dos(0, 0, 10, 10)
+        assert d is not None
+        # 0 - 0.5 = -0.5
+        assert abs(d - (-0.5)) < 0.001
+
+    def test_dos_zero_polymorphism(self) -> None:
+        """Test DoS when Pn+Ps=0."""
+        # Only divergence -> returns value (not None)
+        d = dos(10, 10, 0, 0)
+        assert d is not None
+        # 0.5 - 0 = 0.5
+        assert abs(d - 0.5) < 0.001
+
+    def test_dos_all_zero(self) -> None:
+        """Test DoS when all counts are zero."""
+        d = dos(0, 0, 0, 0)
+        assert d is None
+
+    def test_dos_bounds(self) -> None:
+        """Verify DoS is bounded [-1, +1]."""
+        # Maximum DoS = 1: all Dn, no Ds, no polymorphism
+        d_max = dos(10, 0, 0, 10)
+        assert d_max is not None
+        assert abs(d_max - 1.0) < 0.001
+
+        # Minimum DoS = -1: all Ds, no Dn, all Pn, no Ps
+        d_min = dos(0, 10, 10, 0)
+        assert d_min is not None
+        assert abs(d_min - (-1.0)) < 0.001
+
+        # General case should be within bounds
+        d = dos(7, 17, 2, 42)
+        assert d is not None
+        assert -1 <= d <= 1
+
 
 class TestMKResult:
     """Tests for MKResult class."""
@@ -80,6 +139,14 @@ class TestMKResult:
         assert result.p_value is not None
         assert result.ni is not None
         assert result.alpha is not None
+        assert result.dos is not None
+
+    def test_mk_result_dos(self) -> None:
+        """Test DoS calculation in MK result."""
+        result = mk_test_from_counts(dn=6, ds=8, pn=1, ps=8)
+        # DoS = 6/14 - 1/9 = 0.4286 - 0.1111 = 0.3175
+        assert result.dos is not None
+        assert abs(result.dos - (6 / 14 - 1 / 9)) < 0.001
 
     def test_mk_result_to_dict(self) -> None:
         """Test converting result to dictionary."""
@@ -91,6 +158,15 @@ class TestMKResult:
         assert "p_value" in d
         assert "ni" in d
         assert "alpha" in d
+        assert "dos" in d
+
+    def test_mk_result_to_dict_includes_dos(self) -> None:
+        """Test that to_dict includes DoS value."""
+        result = mk_test_from_counts(dn=6, ds=8, pn=1, ps=8)
+        d = result.to_dict()
+        assert "dos" in d
+        assert d["dos"] is not None
+        assert abs(d["dos"] - (6 / 14 - 1 / 9)) < 0.001
 
     def test_mk_result_str(self) -> None:
         """Test string representation."""
@@ -100,6 +176,12 @@ class TestMKResult:
         assert "Dn=7" in s
         assert "Ds=17" in s
         assert "Fisher" in s
+
+    def test_mk_result_str_includes_dos(self) -> None:
+        """Test that string representation includes DoS."""
+        result = mk_test_from_counts(dn=7, ds=17, pn=2, ps=42)
+        s = str(result)
+        assert "DoS:" in s
 
 
 class TestMKTestIntegration:

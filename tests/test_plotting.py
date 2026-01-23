@@ -17,9 +17,9 @@ class TestVolcanoPlot:
     def test_basic_volcano_plot(self) -> None:
         """Test basic volcano plot generation with MKResult."""
         results = [
-            ("gene1", MKResult(dn=10, ds=20, pn=5, ps=10, p_value=0.5, ni=1.0, alpha=0.0)),
-            ("gene2", MKResult(dn=15, ds=10, pn=3, ps=8, p_value=0.01, ni=0.5, alpha=0.5)),
-            ("gene3", MKResult(dn=8, ds=25, pn=6, ps=12, p_value=0.001, ni=1.5, alpha=-0.5)),
+            ("gene1", MKResult(dn=10, ds=20, pn=5, ps=10, p_value=0.5, ni=1.0, alpha=0.0, dos=0.0)),
+            ("gene2", MKResult(dn=15, ds=10, pn=3, ps=8, p_value=0.01, ni=0.5, alpha=0.5, dos=0.3)),
+            ("gene3", MKResult(dn=8, ds=25, pn=6, ps=12, p_value=0.001, ni=1.5, alpha=-0.5, dos=-0.1)),
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -47,6 +47,7 @@ class TestVolcanoPlot:
                     p_value_ingroup=0.5,
                     ni_ingroup=1.0,
                     alpha_ingroup=0.0,
+                    dos_ingroup=0.0,
                 ),
             ),
             (
@@ -65,6 +66,7 @@ class TestVolcanoPlot:
                     p_value_ingroup=0.01,
                     ni_ingroup=0.5,
                     alpha_ingroup=0.5,
+                    dos_ingroup=0.3,
                 ),
             ),
         ]
@@ -78,9 +80,9 @@ class TestVolcanoPlot:
     def test_volcano_plot_skips_invalid_ni(self) -> None:
         """Test that genes with NI=0 or NI=None are skipped."""
         results = [
-            ("gene1", MKResult(dn=10, ds=20, pn=5, ps=10, p_value=0.5, ni=1.0, alpha=0.0)),
-            ("gene2", MKResult(dn=15, ds=10, pn=0, ps=8, p_value=1.0, ni=0.0, alpha=1.0)),
-            ("gene3", MKResult(dn=8, ds=25, pn=6, ps=0, p_value=1.0, ni=None, alpha=None)),
+            ("gene1", MKResult(dn=10, ds=20, pn=5, ps=10, p_value=0.5, ni=1.0, alpha=0.0, dos=0.0)),
+            ("gene2", MKResult(dn=15, ds=10, pn=0, ps=8, p_value=1.0, ni=0.0, alpha=1.0, dos=0.6)),
+            ("gene3", MKResult(dn=8, ds=25, pn=6, ps=0, p_value=1.0, ni=None, alpha=None, dos=-0.76)),
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -91,8 +93,8 @@ class TestVolcanoPlot:
     def test_volcano_plot_no_valid_data(self) -> None:
         """Test that ValueError is raised when no valid data."""
         results = [
-            ("gene1", MKResult(dn=10, ds=20, pn=0, ps=10, p_value=1.0, ni=0.0, alpha=1.0)),
-            ("gene2", MKResult(dn=15, ds=10, pn=0, ps=8, p_value=1.0, ni=None, alpha=None)),
+            ("gene1", MKResult(dn=10, ds=20, pn=0, ps=10, p_value=1.0, ni=0.0, alpha=1.0, dos=0.33)),
+            ("gene2", MKResult(dn=15, ds=10, pn=0, ps=8, p_value=1.0, ni=None, alpha=None, dos=0.6)),
         ]
 
         with TemporaryDirectory() as tmpdir:
@@ -103,8 +105,8 @@ class TestVolcanoPlot:
     def test_volcano_plot_different_formats(self) -> None:
         """Test saving volcano plot in different formats."""
         results = [
-            ("gene1", MKResult(dn=10, ds=20, pn=5, ps=10, p_value=0.5, ni=1.0, alpha=0.0)),
-            ("gene2", MKResult(dn=15, ds=10, pn=3, ps=8, p_value=0.01, ni=0.5, alpha=0.5)),
+            ("gene1", MKResult(dn=10, ds=20, pn=5, ps=10, p_value=0.5, ni=1.0, alpha=0.0, dos=0.0)),
+            ("gene2", MKResult(dn=15, ds=10, pn=3, ps=8, p_value=0.01, ni=0.5, alpha=0.5, dos=0.3)),
         ]
 
         with TemporaryDirectory() as tmpdir:

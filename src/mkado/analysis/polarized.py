@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mkado.analysis.statistics import alpha, fishers_exact, neutrality_index
+from mkado.analysis.statistics import alpha, dos, fishers_exact, neutrality_index
 from mkado.core.alignment import PolarizedAlignedPair
 from mkado.core.codons import DEFAULT_CODE, GeneticCode
 from mkado.core.sequences import SequenceSet
@@ -43,17 +43,19 @@ class PolarizedMKResult:
     p_value_ingroup: float
     ni_ingroup: float | None
     alpha_ingroup: float | None
+    dos_ingroup: float | None
 
     def __str__(self) -> str:
         ni_str = f"{self.ni_ingroup:.4f}" if self.ni_ingroup is not None else "N/A"
         alpha_str = f"{self.alpha_ingroup:.4f}" if self.alpha_ingroup is not None else "N/A"
+        dos_str = f"{self.dos_ingroup:.4f}" if self.dos_ingroup is not None else "N/A"
         return (
             f"Polarized MK Test Results:\n"
             f"  Ingroup Lineage:\n"
             f"    Divergence:    Dn={self.dn_ingroup}, Ds={self.ds_ingroup}\n"
             f"    Polymorphism:  Pn={self.pn_ingroup}, Ps={self.ps_ingroup}\n"
             f"    Fisher's p-value: {self.p_value_ingroup:.4g}\n"
-            f"    NI: {ni_str}, Alpha: {alpha_str}\n"
+            f"    NI: {ni_str}, Alpha: {alpha_str}, DoS: {dos_str}\n"
             f"  Outgroup Lineage:\n"
             f"    Divergence:    Dn={self.dn_outgroup}, Ds={self.ds_outgroup}\n"
             f"  Unpolarized:\n"
@@ -72,6 +74,7 @@ class PolarizedMKResult:
                 "p_value": self.p_value_ingroup,
                 "ni": self.ni_ingroup,
                 "alpha": self.alpha_ingroup,
+                "dos": self.dos_ingroup,
             },
             "outgroup": {
                 "dn": self.dn_outgroup,
@@ -236,6 +239,7 @@ def polarized_mk_test(
     p_val = fishers_exact(dn_in, ds_in, pn_in, ps_in)
     ni = neutrality_index(dn_in, ds_in, pn_in, ps_in)
     a = alpha(dn_in, ds_in, pn_in, ps_in)
+    d = dos(dn_in, ds_in, pn_in, ps_in)
 
     return PolarizedMKResult(
         dn_ingroup=dn_in,
@@ -251,4 +255,5 @@ def polarized_mk_test(
         p_value_ingroup=p_val,
         ni_ingroup=ni,
         alpha_ingroup=a,
+        dos_ingroup=d,
     )

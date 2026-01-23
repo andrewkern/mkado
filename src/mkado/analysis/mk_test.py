@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mkado.analysis.statistics import alpha, fishers_exact, neutrality_index
+from mkado.analysis.statistics import alpha, dos, fishers_exact, neutrality_index
 from mkado.core.alignment import AlignedPair
 from mkado.core.codons import DEFAULT_CODE, GeneticCode
 from mkado.core.sequences import SequenceSet
@@ -26,17 +26,20 @@ class MKResult:
     p_value: float  # Fisher's exact test p-value
     ni: float | None  # Neutrality Index
     alpha: float | None  # Proportion of adaptive substitutions
+    dos: float | None  # Direction of Selection
 
     def __str__(self) -> str:
         ni_str = f"{self.ni:.4f}" if self.ni is not None else "N/A"
         alpha_str = f"{self.alpha:.4f}" if self.alpha is not None else "N/A"
+        dos_str = f"{self.dos:.4f}" if self.dos is not None else "N/A"
         return (
             f"MK Test Results:\n"
             f"  Divergence:    Dn={self.dn}, Ds={self.ds}\n"
             f"  Polymorphism:  Pn={self.pn}, Ps={self.ps}\n"
             f"  Fisher's exact p-value: {self.p_value:.4g}\n"
             f"  Neutrality Index (NI):  {ni_str}\n"
-            f"  Alpha (α):              {alpha_str}"
+            f"  Alpha (α):              {alpha_str}\n"
+            f"  DoS:                    {dos_str}"
         )
 
     def to_dict(self) -> dict:
@@ -49,6 +52,7 @@ class MKResult:
             "p_value": self.p_value,
             "ni": self.ni,
             "alpha": self.alpha,
+            "dos": self.dos,
         }
 
 
@@ -169,6 +173,7 @@ def mk_test(
     p_val = fishers_exact(dn, ds, pn, ps)
     ni = neutrality_index(dn, ds, pn, ps)
     a = alpha(dn, ds, pn, ps)
+    d = dos(dn, ds, pn, ps)
 
     return MKResult(
         dn=dn,
@@ -178,6 +183,7 @@ def mk_test(
         p_value=p_val,
         ni=ni,
         alpha=a,
+        dos=d,
     )
 
 
@@ -200,6 +206,7 @@ def mk_test_from_counts(
     p_val = fishers_exact(dn, ds, pn, ps)
     ni = neutrality_index(dn, ds, pn, ps)
     a = alpha(dn, ds, pn, ps)
+    d = dos(dn, ds, pn, ps)
 
     return MKResult(
         dn=dn,
@@ -209,4 +216,5 @@ def mk_test_from_counts(
         p_value=p_val,
         ni=ni,
         alpha=a,
+        dos=d,
     )

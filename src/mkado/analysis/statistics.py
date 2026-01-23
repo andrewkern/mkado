@@ -84,6 +84,42 @@ def alpha(dn: int, ds: int, pn: int, ps: int) -> float | None:
     return 1.0 - (ds * pn) / (dn * ps)
 
 
+def dos(dn: int, ds: int, pn: int, ps: int) -> float | None:
+    """Calculate the Direction of Selection (DoS) statistic.
+
+    DoS = Dn/(Dn+Ds) - Pn/(Pn+Ps)
+
+    From Stoletzki & Eyre-Walker (2011).
+
+    Interpretation:
+    - DoS = 0: Neutral evolution
+    - DoS > 0: Positive selection (excess adaptive substitutions)
+    - DoS < 0: Slightly deleterious polymorphisms
+
+    Advantages over NI: Symmetric around 0, bounded [-1, +1], well-behaved
+    with small counts.
+
+    Args:
+        dn: Non-synonymous divergence
+        ds: Synonymous divergence
+        pn: Non-synonymous polymorphisms
+        ps: Synonymous polymorphisms
+
+    Returns:
+        DoS value, or None if cannot be calculated (all counts zero)
+    """
+    dn_total = dn + ds
+    pn_total = pn + ps
+
+    if dn_total == 0 and pn_total == 0:
+        return None
+
+    dn_ratio = dn / dn_total if dn_total > 0 else 0.0
+    pn_ratio = pn / pn_total if pn_total > 0 else 0.0
+
+    return dn_ratio - pn_ratio
+
+
 def g_test(dn: int, ds: int, pn: int, ps: int) -> float:
     """Perform G-test (log-likelihood ratio test) on MK table.
 

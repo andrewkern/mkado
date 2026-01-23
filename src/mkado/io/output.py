@@ -55,26 +55,28 @@ def _format_tsv(result: MKResult | PolarizedMKResult | AsymptoticMKResult | Alph
     from mkado.analysis.polarized import PolarizedMKResult
 
     if isinstance(result, MKResult):
-        header = "Dn\tDs\tPn\tPs\tp_value\tNI\talpha"
+        header = "Dn\tDs\tPn\tPs\tp_value\tNI\talpha\tDoS"
         ni_str = f"{result.ni:.6f}" if result.ni is not None else "NA"
         alpha_str = f"{result.alpha:.6f}" if result.alpha is not None else "NA"
-        values = f"{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t{result.p_value:.6g}\t{ni_str}\t{alpha_str}"
+        dos_str = f"{result.dos:.6f}" if result.dos is not None else "NA"
+        values = f"{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t{result.p_value:.6g}\t{ni_str}\t{alpha_str}\t{dos_str}"
         return f"{header}\n{values}"
 
     elif isinstance(result, PolarizedMKResult):
-        header = "lineage\tDn\tDs\tPn\tPs\tp_value\tNI\talpha"
+        header = "lineage\tDn\tDs\tPn\tPs\tp_value\tNI\talpha\tDoS"
         lines = [header]
 
         ni_str = f"{result.ni_ingroup:.6f}" if result.ni_ingroup is not None else "NA"
         alpha_str = f"{result.alpha_ingroup:.6f}" if result.alpha_ingroup is not None else "NA"
+        dos_str = f"{result.dos_ingroup:.6f}" if result.dos_ingroup is not None else "NA"
         lines.append(
             f"ingroup\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
             f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
-            f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}"
+            f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}\t{dos_str}"
         )
-        lines.append(f"outgroup\t{result.dn_outgroup}\t{result.ds_outgroup}\tNA\tNA\tNA\tNA\tNA")
+        lines.append(f"outgroup\t{result.dn_outgroup}\t{result.ds_outgroup}\tNA\tNA\tNA\tNA\tNA\tNA")
         lines.append(
-            f"unpolarized\t{result.dn_unpolarized}\t{result.ds_unpolarized}\tNA\tNA\tNA\tNA\tNA"
+            f"unpolarized\t{result.dn_unpolarized}\t{result.ds_unpolarized}\tNA\tNA\tNA\tNA\tNA\tNA"
         )
         return "\n".join(lines)
 
@@ -155,23 +157,24 @@ def format_batch_results(
         _, first_result = results[0]
         if isinstance(first_result, MKResult):
             if adjusted_pvalues is not None:
-                header = "gene\tDn\tDs\tPn\tPs\tp_value\tp_value_adjusted\tNI\talpha"
+                header = "gene\tDn\tDs\tPn\tPs\tp_value\tp_value_adjusted\tNI\talpha\tDoS"
             else:
-                header = "gene\tDn\tDs\tPn\tPs\tp_value\tNI\talpha"
+                header = "gene\tDn\tDs\tPn\tPs\tp_value\tNI\talpha\tDoS"
             lines = [header]
             for i, (name, result) in enumerate(results):
                 if isinstance(result, MKResult):
                     ni_str = f"{result.ni:.6f}" if result.ni is not None else "NA"
                     alpha_str = f"{result.alpha:.6f}" if result.alpha is not None else "NA"
+                    dos_str = f"{result.dos:.6f}" if result.dos is not None else "NA"
                     if adjusted_pvalues is not None:
                         lines.append(
                             f"{name}\t{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t"
-                            f"{result.p_value:.6g}\t{adjusted_pvalues[i]:.6g}\t{ni_str}\t{alpha_str}"
+                            f"{result.p_value:.6g}\t{adjusted_pvalues[i]:.6g}\t{ni_str}\t{alpha_str}\t{dos_str}"
                         )
                     else:
                         lines.append(
                             f"{name}\t{result.dn}\t{result.ds}\t{result.pn}\t{result.ps}\t"
-                            f"{result.p_value:.6g}\t{ni_str}\t{alpha_str}"
+                            f"{result.p_value:.6g}\t{ni_str}\t{alpha_str}\t{dos_str}"
                         )
             return "\n".join(lines)
 
@@ -189,27 +192,28 @@ def format_batch_results(
 
         elif isinstance(first_result, PolarizedMKResult):
             if adjusted_pvalues is not None:
-                header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tp_value_adjusted\tNI\talpha"
+                header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tp_value_adjusted\tNI\talpha\tDoS"
             else:
-                header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tNI\talpha"
+                header = "gene\tDn_ingroup\tDs_ingroup\tPn_ingroup\tPs_ingroup\tDn_outgroup\tDs_outgroup\tp_value\tNI\talpha\tDoS"
             lines = [header]
             for i, (name, result) in enumerate(results):
                 if isinstance(result, PolarizedMKResult):
                     ni_str = f"{result.ni_ingroup:.6f}" if result.ni_ingroup is not None else "NA"
                     alpha_str = f"{result.alpha_ingroup:.6f}" if result.alpha_ingroup is not None else "NA"
+                    dos_str = f"{result.dos_ingroup:.6f}" if result.dos_ingroup is not None else "NA"
                     if adjusted_pvalues is not None:
                         lines.append(
                             f"{name}\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
                             f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
                             f"{result.dn_outgroup}\t{result.ds_outgroup}\t"
-                            f"{result.p_value_ingroup:.6g}\t{adjusted_pvalues[i]:.6g}\t{ni_str}\t{alpha_str}"
+                            f"{result.p_value_ingroup:.6g}\t{adjusted_pvalues[i]:.6g}\t{ni_str}\t{alpha_str}\t{dos_str}"
                         )
                     else:
                         lines.append(
                             f"{name}\t{result.dn_ingroup}\t{result.ds_ingroup}\t"
                             f"{result.pn_ingroup}\t{result.ps_ingroup}\t"
                             f"{result.dn_outgroup}\t{result.ds_outgroup}\t"
-                            f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}"
+                            f"{result.p_value_ingroup:.6g}\t{ni_str}\t{alpha_str}\t{dos_str}"
                         )
             return "\n".join(lines)
 

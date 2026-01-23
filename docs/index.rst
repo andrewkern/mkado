@@ -41,6 +41,7 @@ Quick Example
    batch-workflow
    asymptotic
    alpha-tg
+   dos
    file-formats
    api
 

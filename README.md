@@ -182,6 +182,7 @@ MK Test Results:
   Fisher's exact p-value: 0.176
   Neutrality Index (NI):  0.1667
   Alpha (α):              0.8333
+  DoS:                    0.3175
 ```
 
 ## Python API
@@ -219,6 +220,16 @@ result = mk_test(ingroup, outgroup)
 - **α = 0**: No adaptive substitutions
 - **α > 0**: Proportion of substitutions driven by positive selection
 - **α < 0**: Excess polymorphism relative to divergence
+
+### Direction of Selection (DoS)
+
+From Stoletzki & Eyre-Walker (2011), DoS = Dn/(Dn+Ds) - Pn/(Pn+Ps):
+
+- **DoS = 0**: Neutral evolution
+- **DoS > 0**: Positive selection (excess adaptive substitutions)
+- **DoS < 0**: Slightly deleterious polymorphisms
+
+DoS is bounded [-1, +1] and symmetric around 0, making it easier to interpret than NI.
 
 ## Development
 
