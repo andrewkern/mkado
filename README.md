@@ -252,6 +252,7 @@ See the [documentation](https://mkado.readthedocs.io/) for detailed tutorials an
 
 ## References
 
+- Haller, B. C., & Messer, P. W. (2017). asymptoticMK: A web-based tool for the asymptotic McDonald–Kreitman test. G3: Genes, Genomes, Genetics, 7(5), 1569-1575. https://doi.org/10.1534/g3.117.039693
 - McDonald, J. H., & Kreitman, M. (1991). Adaptive protein evolution at the Adh locus in Drosophila. Nature, 351(6328), 652-654. https://doi.org/10.1038/351652a0
 - Messer, P. W., & Petrov, D. A. (2013). Frequent adaptation and the McDonald–Kreitman test. PNAS, 110(21), 8615-8620. https://doi.org/10.1073/pnas.1220835110
 - Rand, D. M., & Kann, L. M. (1996). Excess amino acid polymorphism in mitochondrial DNA: contrasts among genes from Drosophila, mice, and humans. Molecular Biology and Evolution, 13(6), 735-748. https://doi.org/10.1093/oxfordjournals.molbev.a025634
