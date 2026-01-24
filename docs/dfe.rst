@@ -18,7 +18,7 @@ This approach has been shown to outperform both standard and asymptotic MK metho
 The GRAPES Framework
 --------------------
 
-GRAPES (Galtier 2016) introduced a unified framework for DFE-based inference that mkado implements. The key components are:
+GRAPES (`Galtier 2016`_) introduced a unified framework for DFE-based inference that mkado implements. The key components are:
 
 **Site Frequency Spectrum (SFS)**
 
@@ -29,13 +29,13 @@ The SFS describes how many polymorphisms are observed at each frequency class. U
 
 **Fixation Probability**
 
-The probability that a new mutation reaches fixation depends on its selection coefficient *S* = 4Ns (scaled by effective population size):
+The probability that a mutation at frequency *p* reaches fixation depends on its selection coefficient *s*. The Kimura (1962) diffusion approximation gives:
 
 .. math::
 
-   P_{fix}(S) = \frac{1 - e^{-2S/N}}{1 - e^{-2S}}
+   P_{fix}(p) = \frac{1 - e^{-2Nsp}}{1 - e^{-2Ns}}
 
-For neutral mutations (S=0), P\ :sub:`fix` = 1/2N. Beneficial mutations (S>0) have higher fixation probability; deleterious mutations (S<0) have lower.
+For a new mutation (*p* = 1/2N), the fixation rate relative to neutral simplifies to S/(1 - e\ :sup:`-S`) where S = 2Ns, which is what GRAPES and mkado use internally. Beneficial mutations (s > 0) fix more readily; deleterious mutations (s < 0) are less likely to fix.
 
 **Likelihood Function**
 
@@ -262,6 +262,8 @@ General guidelines:
 - **GammaGamma**: Use when beneficial mutations may have a non-exponential distribution
 - **DisplacedGamma**: Use when the DFE is expected to be unimodal and continuous
 
+A systematic evaluation by `Al-Saffar & Hahn (2022)`_ found that **GammaExpo**, **GammaGamma**, and **DisplacedGamma** produce the most accurate alpha estimates across a range of simulated demographic and selective scenarios. These three models showed minimal bias (|Δα| < 0.03), while alternative models like ScaledBeta and FGM-BesselK tended to overestimate alpha.
+
 Comparison with Other Methods
 -----------------------------
 
@@ -307,6 +309,9 @@ References
 
 .. _Galtier 2016: https://doi.org/10.1371/journal.pgen.1005774
 .. _Tataru et al. 2017: https://doi.org/10.1534/genetics.117.300323
+.. _Al-Saffar & Hahn (2022): https://doi.org/10.1101/2022.08.15.504017
+
+Al-Saffar SI, Hahn MW (2022) Estimating the rate of adaptive molecular evolution when the distribution of fitness effects is right-skewed. *bioRxiv*. https://doi.org/10.1101/2022.08.15.504017
 
 Galtier N (2016) Adaptive Protein Evolution in Animals and the Effective Population Size Hypothesis. *PLoS Genetics* 12(1):e1005774. https://doi.org/10.1371/journal.pgen.1005774
 
