@@ -616,14 +616,12 @@ def displaced_gamma_density(
 ) -> float:
     """Displaced Gamma DFE.
 
-    Shifts the gamma distribution by a displacement factor to allow
-    some beneficial mutations.
-
-    The density is Gamma(s - displacement) where displacement is typically
-    negative, allowing s > 0 to have non-zero probability.
+    Following GRAPES: density is non-zero when s <= displacement (s0).
+    The gamma is evaluated at (-s - displacement), matching GRAPES formula:
+        x = -mx; gamma(x - s0) where x - s0 = -s - displacement
 
     Args:
-        s: Selection coefficient
+        s: Selection coefficient (4*Ne*s)
         shape: Shape parameter
         mean: Mean of the unshifted gamma
         displacement: Shift parameter (typically negative, in [-100, 0])
@@ -631,21 +629,20 @@ def displaced_gamma_density(
     Returns:
         DFE density at s
     """
-    # Shifted coordinate
-    shifted_s = s - displacement
-
-    if shifted_s >= 0:
+    # GRAPES formula: if (mx > global_s0) return 0
+    # Density is non-zero when s <= displacement
+    if s > displacement:
         return 0.0
 
-    # Use gamma density on shifted coordinate
-    abs_shifted = -shifted_s
+    # GRAPES: x = -mx; gamma_arg = x - s0 = -s - displacement
+    gamma_arg = -s - displacement
 
-    if abs_shifted <= 0 or mean <= 0 or shape <= 0:
+    if gamma_arg <= 0 or mean <= 0 or shape <= 0:
         return 0.0
 
     scale = mean / shape
-    log_density = ((shape - 1.0) * math.log(abs_shifted)
-                   - abs_shifted / scale
+    log_density = ((shape - 1.0) * math.log(gamma_arg)
+                   - gamma_arg / scale
                    - shape * math.log(scale)
                    - math.lgamma(shape))
 
@@ -800,7 +797,11 @@ def displaced_gamma_density_grid(
     mean: float,
     displacement: float,
 ) -> np.ndarray:
-    """Evaluate DisplacedGamma DFE density on entire S grid (vectorized)."""
+    """Evaluate DisplacedGamma DFE density on entire S grid (vectorized).
+
+    Following GRAPES: density is non-zero when s <= displacement.
+    The gamma is evaluated at (-s - displacement).
+    """
     n = len(s_grid)
     result = np.zeros(n)
 
@@ -812,16 +813,21 @@ def displaced_gamma_density_grid(
     lgamma_shape = math.lgamma(shape)
 
     for i in range(n):
-        shifted_s = s_grid[i] - displacement
-        if shifted_s >= 0:
+        s = s_grid[i]
+        # GRAPES: if (mx > global_s0) return 0
+        if s > displacement:
             result[i] = 0.0
         else:
-            abs_shifted = -shifted_s
-            log_density = ((shape - 1.0) * math.log(abs_shifted)
-                           - abs_shifted / scale
-                           - shape * log_scale
-                           - lgamma_shape)
-            result[i] = math.exp(log_density)
+            # GRAPES: gamma_arg = x - s0 = -s - displacement
+            gamma_arg = -s - displacement
+            if gamma_arg <= 0:
+                result[i] = 0.0
+            else:
+                log_density = ((shape - 1.0) * math.log(gamma_arg)
+                               - gamma_arg / scale
+                               - shape * log_scale
+                               - lgamma_shape)
+                result[i] = math.exp(log_density)
 
     return result
 

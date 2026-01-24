@@ -212,7 +212,7 @@ def run_grapes(dofe_path: Path, model: str) -> tuple[dict, float]:
 
     Args:
         dofe_path: Path to input .dofe file
-        model: DFE model to fit
+        model: DFE model to fit (uses GRAPES model names)
 
     Returns:
         Tuple of (results_dict, elapsed_time_seconds)
@@ -247,18 +247,29 @@ def run_grapes(dofe_path: Path, model: str) -> tuple[dict, float]:
             output_path.unlink()
 
 
-def run_mkado(dfe_input: DFEInput, model: str) -> tuple[dict, float]:
+# Model name mapping: GRAPES name -> mkado name
+GRAPES_TO_MKADO_MODEL = {
+    "GammaZero": "GammaZero",
+    "GammaExpo": "GammaExpo",
+    "GammaGamma": "GammaGamma",
+    "DisplGamma": "DisplacedGamma",
+}
+
+
+def run_mkado(dfe_input: DFEInput, grapes_model: str) -> tuple[dict, float]:
     """Run mkado DFE fitting and return results with timing.
 
     Args:
         dfe_input: DFE input data
-        model: DFE model to fit
+        grapes_model: GRAPES model name (will be mapped to mkado name)
 
     Returns:
         Tuple of (results_dict, elapsed_time_seconds)
     """
+    mkado_model = GRAPES_TO_MKADO_MODEL.get(grapes_model, grapes_model)
+
     precalc = PrecomputedData(dfe_input.n_samples)
-    dfe_model = get_model(model)
+    dfe_model = get_model(mkado_model)
 
     start = time.perf_counter()
     result = dfe_model.fit(dfe_input, precalc)
@@ -270,14 +281,8 @@ def run_mkado(dfe_input: DFEInput, model: str) -> tuple[dict, float]:
         "lnL": result.log_likelihood,
     }
 
-    if model == "GammaZero":
-        parsed["GammaZero:negGshape"] = result.dfe_params.get("shape")
-        parsed["GammaZero:negGmean"] = result.dfe_params.get("mean")
-    elif model == "GammaExpo":
-        parsed["GammaExpo:negGshape"] = result.dfe_params.get("shape_del")
-        parsed["GammaExpo:negGmean"] = result.dfe_params.get("mean_del")
-        parsed["GammaExpo:pos_prop"] = result.dfe_params.get("prop_ben")
-        parsed["GammaExpo:posGmean"] = result.dfe_params.get("mean_ben")
+    # Add all DFE params for inspection
+    parsed["dfe_params"] = result.dfe_params
 
     return parsed, elapsed
 
@@ -316,7 +321,9 @@ def main() -> int:
     ]
 
     n_samples = 20
-    models = ["GammaZero", "GammaExpo"]
+    # All models supported by both GRAPES and mkado
+    # Note: GammaGamma is in GRAPES source but not advertised in CLI help
+    models = ["GammaZero", "GammaExpo", "GammaGamma", "DisplGamma"]
     results_summary = []
 
     for dataset_name, files in datasets:
@@ -381,6 +388,15 @@ def main() -> int:
             print(f"    GRAPES: alpha={grapes_alpha:.4f} ({grapes_time:.3f}s)")
             print(f"    mkado:  alpha={mkado_alpha:.4f} ({mkado_time:.3f}s)")
             print(f"    Diff: {alpha_diff:.6f}, Speedup: {speedup:.1f}x")
+
+            # Print parameters for debugging
+            if alpha_diff >= 0.01:
+                mkado_params = mkado_result.get("dfe_params", {})
+                print(f"    mkado params: {mkado_params}")
+                # Print relevant GRAPES params
+                grapes_params = {k: v for k, v in grapes_result.items()
+                                if k not in ["model", "alpha", "omegaA", "omegaNA", "lnL", "AIC"]}
+                print(f"    GRAPES params: {grapes_params}")
 
             is_pass = alpha_diff < 0.01
             print(f"    Status: {'PASS' if is_pass else 'FAIL'}")

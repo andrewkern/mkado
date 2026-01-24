@@ -551,16 +551,17 @@ class DFEModel(ABC):
                     options={"maxiter": 10000, "ftol": 1e-8},
                 )
 
-                # If L-BFGS-B failed or gave abnormal termination, try Nelder-Mead
+                # If L-BFGS-B failed, try SLSQP (also respects bounds)
                 if not result.success:
-                    result_nm = optimize.minimize(
+                    result_slsqp = optimize.minimize(
                         objective,
                         x0,
-                        method="Nelder-Mead",
-                        options={"maxiter": 10000, "xatol": 1e-6, "fatol": 1e-6},
+                        method="SLSQP",
+                        bounds=opt_bounds,
+                        options={"maxiter": 10000, "ftol": 1e-8},
                     )
-                    if result_nm.success and result_nm.fun < result.fun:
-                        result = result_nm
+                    if result_slsqp.success and result_slsqp.fun < result.fun:
+                        result = result_slsqp
 
                 if result.fun < best_nll:
                     best_nll = result.fun
@@ -877,12 +878,18 @@ class GammaGammaModel(DFEModel):
     @property
     def param_bounds(self) -> list[tuple[float, float]]:
         return [
-            (0.05, 100.0),    # shape_del
-            (1.0, 1e6),       # mean_del
-            (0.0, 0.5),       # prop_ben
-            (0.05, 100.0),    # shape_ben
-            (1e-4, 1e4),      # mean_ben
+            (0.05, 100.0),    # shape_del (negGshape)
+            (1.0, 1e6),       # mean_del (negGmean)
+            (0.0, 0.1),       # prop_ben - GRAPES MAX_ORIENTATION_ERROR
+            (0.05, 100.0),    # shape_ben (posGshape)
+            (1e-4, 1e4),      # mean_ben (posGmean)
         ]
+
+    @property
+    def log_scale_params(self) -> list[bool]:
+        """GRAPES uses log scale for negGmean and posGmean."""
+        # negGshape=none, negGmean=log, pos_prop=none, posGshape=none, posGmean=log
+        return [False, True, False, False, True]
 
     def density(self, s: float, params: np.ndarray) -> float:
         shape_del, mean_del, prop_ben, shape_ben, mean_ben = params
@@ -898,13 +905,29 @@ class GammaGammaModel(DFEModel):
         )
 
     def _get_starting_points(self) -> list[np.ndarray]:
-        """Starting points tuned for GammaGamma model."""
+        """Starting points tuned for GammaGamma model.
+
+        Based on GRAPES solutions for various dataset sizes:
+        - Small: negGshape=100, negGmean=17.7, posGshape=60, posGmean=0.0005
+        - Large: negGshape=0.32, negGmean=1.0, posGshape=100, posGmean=6864
+        """
         return [
             # [shape_del, mean_del, prop_ben, shape_ben, mean_ben]
-            np.array([0.3, 10000.0, 0.01, 0.5, 500.0]),
-            np.array([0.4, 20000.0, 0.005, 1.0, 1000.0]),
-            np.array([0.3, 5000.0, 0.02, 0.3, 100.0]),
-            np.array([0.5, 15000.0, 0.008, 0.8, 2000.0]),
+            # GRAPES large dataset pattern: low shape_del, low mean_del, HIGH posGmean
+            np.array([0.32, 1.0, 0.1, 100.0, 6000.0]),
+            np.array([0.35, 1.0, 0.1, 80.0, 5000.0]),
+            np.array([0.30, 1.0, 0.1, 100.0, 7000.0]),
+            np.array([0.40, 1.0, 0.1, 90.0, 4000.0]),
+            np.array([0.25, 1.5, 0.1, 100.0, 8000.0]),
+            # GRAPES small dataset pattern: high shape_del, low mean_del, tiny posGmean
+            np.array([100.0, 17.0, 0.1, 60.0, 0.0005]),
+            np.array([100.0, 20.0, 0.1, 50.0, 0.001]),
+            np.array([80.0, 15.0, 0.1, 70.0, 0.0005]),
+            np.array([90.0, 18.0, 0.1, 55.0, 0.0003]),
+            # Medium configurations
+            np.array([0.30, 10000.0, 0.1, 0.5, 500.0]),
+            np.array([0.30, 10000.0, 0.1, 1.0, 1000.0]),
+            np.array([0.44, 1.0, 0.1, 100.0, 8.0]),
         ]
 
 
@@ -934,10 +957,16 @@ class DisplacedGammaModel(DFEModel):
     @property
     def param_bounds(self) -> list[tuple[float, float]]:
         return [
-            (0.05, 100.0),    # shape
-            (1.0, 1e6),       # mean
-            (-100.0, 0.0),    # displacement
+            (0.05, 100.0),    # shape (negGshape)
+            (1.0, 1e7),       # mean (negGmean) - GRAPES allows up to 1e7
+            (-100.0, 0.0),    # displacement (s0)
         ]
+
+    @property
+    def log_scale_params(self) -> list[bool]:
+        """GRAPES uses log scale for negGmean only."""
+        # shape=none, mean=log, displacement=none
+        return [False, True, False]
 
     def density(self, s: float, params: np.ndarray) -> float:
         shape, mean, displacement = params
@@ -949,13 +978,34 @@ class DisplacedGammaModel(DFEModel):
         return displaced_gamma_density_grid(s_grid, shape, mean, displacement)
 
     def _get_starting_points(self) -> list[np.ndarray]:
-        """Starting points tuned for DisplacedGamma model."""
+        """Starting points tuned for DisplacedGamma model.
+
+        Based on GRAPES solutions for various dataset sizes:
+        - Small: shape~1, mean~2.5, s0~0
+        - Medium: shape~9, mean~1, s0~-0.17
+        - Large: shape~62, mean~1, s0~-0.42
+        """
         return [
             # [shape, mean, displacement]
-            np.array([0.3, 10000.0, -10.0]),
-            np.array([0.4, 20000.0, -5.0]),
-            np.array([0.3, 5000.0, -50.0]),
-            np.array([0.5, 15000.0, -20.0]),
+            # GRAPES medium dataset pattern: shape~9, very small displacement
+            np.array([8.9, 1.0, -0.17]),
+            np.array([9.0, 1.0, -0.173]),
+            np.array([8.5, 1.0, -0.16]),
+            np.array([10.0, 1.0, -0.18]),
+            np.array([7.0, 1.0, -0.14]),
+            np.array([12.0, 1.0, -0.20]),
+            np.array([6.0, 1.2, -0.12]),
+            np.array([15.0, 1.0, -0.22]),
+            # GRAPES large dataset pattern: high shape, larger displacement
+            np.array([62.0, 1.0, -0.42]),
+            np.array([50.0, 1.5, -0.40]),
+            np.array([75.0, 1.0, -0.35]),
+            np.array([100.0, 1.7, -0.45]),
+            # GRAPES small dataset pattern: near-zero displacement
+            np.array([1.0, 2.5, -0.001]),
+            np.array([0.96, 2.5, -0.001]),
+            np.array([1.0, 2.5, -0.0001]),
+            np.array([0.5, 3.0, -0.01]),
         ]
 
 
